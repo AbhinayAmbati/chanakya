@@ -83,6 +83,11 @@ class SettingsViewModel(
         viewModelScope.launch { blocklistRepository.importFromUri(uri) }
     }
 
+    /** Enable or disable a user rule without deleting it. */
+    fun setRuleEnabled(id: Long, enabled: Boolean) {
+        viewModelScope.launch { userRuleRepository.setEnabled(id, enabled) }
+    }
+
     /** Delete a user rule. */
     fun deleteRule(id: Long) {
         viewModelScope.launch { userRuleRepository.delete(id) }

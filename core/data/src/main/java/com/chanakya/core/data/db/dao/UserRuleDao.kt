@@ -24,6 +24,17 @@ interface UserRuleDao {
     @Insert
     suspend fun insert(rule: UserRuleEntity): Long
 
+    /**
+     * Count rules that are identical to the given one, so duplicates are not stored.
+     *
+     * A null package name is compared via IFNULL, because `= NULL` never matches.
+     */
+    @Query(
+        "SELECT COUNT(*) FROM user_rules WHERE type = :type AND scope = :scope " +
+            "AND domain = :domain AND IFNULL(packageName, '') = IFNULL(:packageName, '')",
+    )
+    suspend fun countMatching(type: String, scope: String, domain: String, packageName: String?): Int
+
     /** Delete a rule by id. */
     @Query("DELETE FROM user_rules WHERE id = :id")
     suspend fun deleteById(id: Long)

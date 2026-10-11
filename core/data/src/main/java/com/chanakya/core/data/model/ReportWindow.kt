@@ -25,7 +25,19 @@ data class ReportWindow(
     /** Whether nothing was recorded in the window. */
     val isEmpty: Boolean get() = blockedCount == 0 && topApps.isEmpty()
 
+    /**
+     * A deliberately conservative estimate of the traffic avoided by blocking.
+     *
+     * Many trackers are small beacons, so this is closer to a lower bound than a
+     * headline figure, and the UI always labels it as an estimate.
+     */
+    val estimatedBytesSaved: Long
+        get() = blockedCount.toLong() * ESTIMATED_BYTES_PER_BLOCKED_REQUEST
+
     companion object {
+        /** Assumed size of the average blocked request. */
+        const val ESTIMATED_BYTES_PER_BLOCKED_REQUEST = 10L * 1024
+
         /** An empty window, used as a loading placeholder. */
         val EMPTY = ReportWindow(
             blockedCount = 0,

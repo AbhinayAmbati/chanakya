@@ -22,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chanakya.app.R
 import com.chanakya.app.di.LocalAppContainer
 import com.chanakya.app.ui.AppViewModelProvider
+import com.chanakya.app.ui.common.ByteFormat
 import com.chanakya.core.data.model.ReportWindow
 import com.chanakya.core.designsystem.component.ChanakyaCard
 import com.chanakya.core.designsystem.component.ChanakyaScreenTitle
@@ -82,6 +83,10 @@ private fun WindowSection(title: String, window: ReportWindow) {
                 StatTile(
                     value = window.appCount.toString(),
                     label = stringResource(R.string.reports_apps),
+                )
+                StatTile(
+                    value = ByteFormat.human(window.estimatedBytesSaved),
+                    label = stringResource(R.string.reports_data_saved),
                 )
             }
 

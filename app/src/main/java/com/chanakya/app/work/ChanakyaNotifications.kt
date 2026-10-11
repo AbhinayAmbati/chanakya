@@ -6,6 +6,7 @@ import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.chanakya.app.R
+import com.chanakya.app.ui.common.ByteFormat
 
 /**
  * Builds and posts the notifications used by the background workers.
@@ -15,24 +16,43 @@ import com.chanakya.app.R
  */
 class ChanakyaNotifications(private val context: Context) {
 
-    /** Post the daily protection summary. */
-    fun showReport(blockedCount: Int, appCount: Int, topApp: String?) {
+    /** Post a protection summary. */
+    fun showReport(
+        blockedCount: Int,
+        appCount: Int,
+        topApp: String?,
+        estimatedBytesSaved: Long,
+        weekly: Boolean,
+    ) {
         ensureChannel(REPORT_CHANNEL_ID, context.getString(R.string.report_channel_name))
 
-        val body = if (blockedCount == 0) {
-            context.getString(R.string.report_body_quiet)
-        } else {
-            context.getString(R.string.report_body, blockedCount, appCount)
+        val title = context.getString(
+            if (weekly) R.string.report_weekly_title else R.string.report_title,
+        )
+        val body = when {
+            blockedCount == 0 -> context.getString(R.string.report_body_quiet)
+            weekly -> context.getString(R.string.report_weekly_body, blockedCount, appCount)
+            else -> context.getString(R.string.report_body, blockedCount, appCount)
         }
+
         val text = buildString {
             append(body)
+            if (blockedCount > 0) {
+                append(" ")
+                append(
+                    context.getString(
+                        R.string.report_data_saved,
+                        ByteFormat.human(estimatedBytesSaved),
+                    ),
+                )
+            }
             if (!topApp.isNullOrBlank()) {
                 append(" - ")
                 append(context.getString(R.string.report_top_app, topApp))
             }
         }
 
-        post(REPORT_NOTIFICATION_ID, context.getString(R.string.report_title), text, REPORT_CHANNEL_ID)
+        post(REPORT_NOTIFICATION_ID, title, text, REPORT_CHANNEL_ID)
     }
 
     /** Post the periodic reminder to reset the advertising ID. */

@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - IPv6 support: DNS interception and IP-level blocking now handle IPv6 as well as IPv4,
   so filtering works on IPv6-first mobile networks.
 - Blocklist import now accepts IP ranges (IPv4 and IPv6 CIDR) alongside domains.
+- Weekly protection summary notification, alongside the existing daily one.
+- "Estimated data saved" is now shown on the Reports screen and in the summaries.
+- User rules can be paused from Settings without deleting them, and exact duplicate
+  rules are no longer stored.
 
 ### Fixed
 

@@ -52,6 +52,7 @@
     <string name="reports_apps">Apps</string>
     <string name="reports_top_networks">Top networks</string>
     <string name="reports_no_activity">No activity recorded in this period.</string>
+    <string name="reports_data_saved">Data saved</string>
     <string name="rule_applied_allow">Allowed by your rule</string>
     <string name="rule_applied_block">Blocked by your rule</string>
 
@@ -79,6 +80,7 @@
     <string name="settings_rules">Your rules</string>
     <string name="settings_rules_empty">No rules yet. Open an app and use the menu on a domain to allow or block it.</string>
     <string name="settings_rule_delete">Delete rule</string>
+    <string name="settings_rule_paused">paused</string>
     <string name="rule_type_block">Block</string>
     <string name="rule_type_allow">Allow</string>
     <string name="rule_scope_everywhere">everywhere</string>
@@ -96,6 +98,9 @@
     <string name="report_channel_name">Daily summary</string>
     <string name="report_title">Your daily protection summary</string>
     <string name="report_body">Chanakya blocked %1$d trackers across %2$d apps in the last day.</string>
+    <string name="report_weekly_title">Your weekly protection summary</string>
+    <string name="report_weekly_body">Chanakya blocked %1$d trackers across %2$d apps this week.</string>
+    <string name="report_data_saved">About %1$s of data saved (estimated).</string>
     <string name="report_body_quiet">No trackers were blocked in the last day.</string>
     <string name="report_top_app">Top app: %1$s</string>
     <string name="ad_id_channel_name">Advertising ID</string>

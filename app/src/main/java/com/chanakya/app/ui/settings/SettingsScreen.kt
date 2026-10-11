@@ -131,7 +131,11 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
         } else {
             items(userRules, key = { it.id }) { rule ->
-                RuleRow(rule = rule, onDelete = { viewModel.deleteRule(rule.id) })
+                RuleRow(
+                    rule = rule,
+                    onToggle = { enabled -> viewModel.setRuleEnabled(rule.id, enabled) },
+                    onDelete = { viewModel.deleteRule(rule.id) },
+                )
             }
         }
 
@@ -230,9 +234,13 @@ private fun BlocklistRow(list: BlocklistInfo, onToggle: (Boolean) -> Unit) {
     }
 }
 
-/** One user rule with its scope and a delete action. */
+/** One user rule: its scope, a switch to pause it, and a delete action. */
 @Composable
-private fun RuleRow(rule: UserRule, onDelete: () -> Unit) {
+private fun RuleRow(
+    rule: UserRule,
+    onToggle: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
     ChanakyaCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -250,12 +258,18 @@ private fun RuleRow(rule: UserRule, onDelete: () -> Unit) {
                 )
                 val scopeLabel = rule.packageName
                     ?: stringResource(R.string.rule_scope_everywhere)
+                val pausedLabel = stringResource(R.string.settings_rule_paused)
                 Text(
-                    text = "$typeLabel - $scopeLabel",
+                    text = if (rule.enabled) {
+                        "$typeLabel - $scopeLabel"
+                    } else {
+                        "$typeLabel - $scopeLabel - $pausedLabel"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Switch(checked = rule.enabled, onCheckedChange = onToggle)
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Default.Delete,

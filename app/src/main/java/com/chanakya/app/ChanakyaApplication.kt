@@ -21,7 +21,10 @@ class ChanakyaApplication : Application() {
         super.onCreate()
         container = AppContainer(this)
 
-        // The daily summary is idempotent: re-scheduling never duplicates the job.
-        ReportScheduler(this).scheduleDailyReport()
+        // Both summaries are idempotent: re-scheduling never duplicates the job.
+        ReportScheduler(this).apply {
+            scheduleDailyReport()
+            scheduleWeeklyReport()
+        }
     }
 }

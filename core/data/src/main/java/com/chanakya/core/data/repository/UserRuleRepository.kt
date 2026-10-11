@@ -19,8 +19,20 @@ class UserRuleRepository(private val userRuleDao: UserRuleDao) {
     /** Read every rule once. */
     suspend fun getAll(): List<UserRule> = userRuleDao.getAll().map { it.toModel() }
 
-    /** Add a rule. */
+    /**
+     * Add a rule, ignoring an exact duplicate.
+     *
+     * Without this, tapping the same menu action twice would leave two identical rows
+     * that both have to be deleted.
+     */
     suspend fun add(rule: UserRule) {
+        val alreadyExists = userRuleDao.countMatching(
+            type = rule.type.name,
+            scope = rule.scope.name,
+            domain = rule.domain,
+            packageName = rule.packageName,
+        ) > 0
+        if (alreadyExists) return
         userRuleDao.insert(rule.toEntity())
     }
 
