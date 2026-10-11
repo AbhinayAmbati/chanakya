@@ -5,7 +5,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -183,7 +182,7 @@ class TcpRelay(
     }
 
     /** Write the client's payloads out to the real socket, in order. */
-    private fun pumpToServer(flow: Flow) {
+    private suspend fun pumpToServer(flow: Flow) {
         try {
             val output = flow.socket.getOutputStream()
             for (chunk in flow.outgoing) {
@@ -206,7 +205,9 @@ class TcpRelay(
         val buffer = ByteArray(READ_SIZE)
         try {
             val input = flow.socket.getInputStream()
-            while (isActive) {
+            // Runs until the server closes or the socket is torn down underneath us,
+            // which makes the read below throw.
+            while (true) {
                 val read = input.read(buffer)
                 if (read < 0) break
                 if (read == 0) continue
