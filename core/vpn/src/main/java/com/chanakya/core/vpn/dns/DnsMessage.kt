@@ -62,36 +62,41 @@ object DnsMessage {
     /**
      * Build a response that blocks the query by answering with a null address.
      *
-     * For an A query the answer is `0.0.0.0`; for other types an empty (NOERROR)
-     * response is returned so the client falls back to another type. Both cases stop
-     * the query from ever reaching the real resolver.
+     * An A query is answered with `0.0.0.0` and an AAAA query with `::`, so the client
+     * gets a definite, unusable answer for whichever family it asked about. Other types
+     * get an empty (NOERROR) response. In every case the query never reaches the real
+     * resolver.
      */
     fun buildBlockedResponse(query: ByteArray, question: Question): ByteArray {
         val header = query.copyOfRange(0, HEADER_LENGTH)
         val questionBytes = query.copyOfRange(HEADER_LENGTH, question.questionEnd)
+
+        val rdata: ByteArray? = when (question.type) {
+            TYPE_A -> ByteArray(4)      // 0.0.0.0
+            TYPE_AAAA -> ByteArray(16)  // ::
+            else -> null
+        }
 
         // Response flags: standard response, recursion available, no error.
         val flags = 0x8180
         header[2] = (flags shr 8).toByte()
         header[3] = flags.toByte()
         header[4] = 0; header[5] = 1 // QDCOUNT = 1
-        val answers = if (question.type == TYPE_A) 1 else 0
-        header[6] = 0; header[7] = answers.toByte() // ANCOUNT
+        header[6] = 0; header[7] = (if (rdata != null) 1 else 0).toByte() // ANCOUNT
         header[8] = 0; header[9] = 0 // NSCOUNT
         header[10] = 0; header[11] = 0 // ARCOUNT
 
-        if (answers == 0) {
-            return header + questionBytes
-        }
+        if (rdata == null) return header + questionBytes
 
-        // Answer: name pointer to the question, type A, class IN, TTL 60, 4-byte rdata.
-        val answer = ByteArray(16)
+        // Answer: name pointer to the question, the query's type, class IN, TTL 60.
+        val answer = ByteArray(12 + rdata.size)
         answer[0] = 0xC0.toByte(); answer[1] = 0x0C.toByte() // pointer to offset 12
-        answer[2] = 0; answer[3] = TYPE_A.toByte()
+        answer[2] = 0; answer[3] = question.type.toByte()
         answer[4] = 0; answer[5] = CLASS_IN.toByte()
         answer[6] = 0; answer[7] = 0; answer[8] = 0; answer[9] = 60 // TTL
-        answer[10] = 0; answer[11] = 4                              // RDLENGTH
-        answer[12] = 0; answer[13] = 0; answer[14] = 0; answer[15] = 0 // 0.0.0.0
+        answer[10] = ((rdata.size shr 8) and 0xFF).toByte()
+        answer[11] = (rdata.size and 0xFF).toByte()
+        rdata.copyInto(answer, 12)
 
         return header + questionBytes + answer
     }

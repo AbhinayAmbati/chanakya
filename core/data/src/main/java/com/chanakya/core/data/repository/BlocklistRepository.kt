@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.chanakya.core.data.blocklist.BlocklistCatalog
 import com.chanakya.core.data.blocklist.BlocklistParser
+import com.chanakya.core.data.blocklist.ParsedBlocklist
 import com.chanakya.core.data.db.dao.CustomBlocklistDao
 import com.chanakya.core.data.db.entity.CustomBlocklistEntity
 import com.chanakya.core.data.model.BlocklistInfo
@@ -14,11 +15,12 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Owns the set of blocklists and turns the enabled ones into a single domain set.
+ * Owns the set of blocklists and turns the enabled ones into a domain set and an IP
+ * range set.
  *
- * Bundled lists live in `assets`; user-imported lists live in the database. The
- * resulting domain set is handed to the VPN engine, which wraps it in an immutable
- * snapshot.
+ * Bundled lists live in `assets`; user-imported lists live in the database and may
+ * contain domains, IP ranges, or both. The resulting sets are handed to the VPN engine,
+ * which wraps the domains in an immutable snapshot and the ranges in an [IpBlocklist].
  */
 class BlocklistRepository(
     private val context: Context,
@@ -32,9 +34,7 @@ class BlocklistRepository(
     /** The ids of the lists the user has enabled. */
     fun observeEnabledIds(): Flow<Set<String>> = settingsRepository.enabledBlocklists
 
-    /**
-     * Every list that can be shown in Settings, with its current state.
-     */
+    /** Every list that can be shown in Settings, with its current state. */
     fun observeAvailableLists(): Flow<List<BlocklistInfo>> = combine(
         settingsRepository.enabledBlocklists,
         customBlocklistDao.observeAll(),
@@ -54,7 +54,7 @@ class BlocklistRepository(
                 id = entity.id,
                 name = entity.name,
                 description = "Imported list",
-                entryCount = entity.domainSet().size,
+                entryCount = entity.lines().size,
                 enabled = entity.id in enabled,
                 isCustom = true,
             )
@@ -63,14 +63,14 @@ class BlocklistRepository(
     }
 
     /**
-     * Load and merge every enabled list into one set of domains.
+     * Load and merge every enabled list's **domains**.
      *
      * @param enabledIds the ids to include.
      */
     suspend fun loadDomains(enabledIds: Set<String>): Set<String> {
         val domains = HashSet<String>()
         for (list in BlocklistCatalog.bundled) {
-            if (list.id in enabledIds) domains += readAsset(list.assetPath)
+            if (list.id in enabledIds) domains += readAsset(list.assetPath).domains
         }
         customBlocklistDao.getAll()
             .filter { it.id in enabledIds }
@@ -79,19 +79,31 @@ class BlocklistRepository(
     }
 
     /**
-     * Import a user-supplied blocklist.
+     * The **IP ranges** to block: the bundled resolver ranges (always active, since
+     * they are what prevents DNS bypass) plus any ranges from the user's enabled lists.
+     */
+    suspend fun loadIpCidrs(enabledIds: Set<String>): Set<String> {
+        val cidrs = HashSet<String>()
+        cidrs += readAsset(IP_RANGES_ASSET).ipRanges
+        customBlocklistDao.getAll()
+            .filter { it.id in enabledIds }
+            .forEach { cidrs += it.ipRangeSet() }
+        return cidrs
+    }
+
+    /**
+     * Import a user-supplied blocklist, storing its domains and IP ranges together.
      *
-     * @param name a display name for the list.
-     * @param text the raw file contents.
-     * @return the number of domains imported.
+     * @return the number of entries imported.
      */
     suspend fun importList(name: String, text: String): Int {
-        val domains = BlocklistParser.parse(text)
-        if (domains.isEmpty()) return 0
+        val parsed = BlocklistParser.parse(text)
+        if (parsed.isEmpty) return 0
+
         val entity = CustomBlocklistEntity(
             id = "custom-" + UUID.randomUUID().toString(),
             name = name.ifBlank { "Imported list" },
-            domains = domains.joinToString("\n"),
+            domains = (parsed.domains + parsed.ipRanges).joinToString("\n"),
             importedAt = System.currentTimeMillis(),
         )
         customBlocklistDao.upsert(entity)
@@ -100,7 +112,7 @@ class BlocklistRepository(
         settingsRepository.setEnabledBlocklists(
             settingsRepository.currentEnabledBlocklists() + entity.id,
         )
-        return domains.size
+        return parsed.entryCount
     }
 
     /**
@@ -108,7 +120,7 @@ class BlocklistRepository(
      *
      * @param uri the document to read.
      * @param displayName an optional name; falls back to the file name.
-     * @return the number of domains imported.
+     * @return the number of entries imported.
      */
     suspend fun importFromUri(uri: Uri, displayName: String? = null): Int {
         val text = try {
@@ -134,15 +146,19 @@ class BlocklistRepository(
     }
 
     /** Read and parse a bundled list from assets. */
-    private fun readAsset(path: String): Set<String> = try {
+    private fun readAsset(path: String): ParsedBlocklist = try {
         context.assets.open(path).bufferedReader().use { reader ->
             BlocklistParser.parse(reader.readLines())
         }
     } catch (exception: Exception) {
-        emptySet()
+        ParsedBlocklist.EMPTY
     }
 
     /** The cached entry count for a bundled list. */
     private fun assetEntryCount(path: String): Int =
-        assetCounts.getOrPut(path) { readAsset(path).size }
+        assetCounts.getOrPut(path) { readAsset(path).entryCount }
+
+    private companion object {
+        const val IP_RANGES_ASSET = "blocklists/ip_ranges.txt"
+    }
 }

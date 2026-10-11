@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - IP-level blocking: apps can no longer bypass DNS filtering via a hardcoded resolver or
   DNS-over-HTTPS. Blocked ranges are routed into the tunnel and dropped, and the device's
   own resolver is always excluded.
+- IPv6 support: DNS interception and IP-level blocking now handle IPv6 as well as IPv4,
+  so filtering works on IPv6-first mobile networks.
+- Blocklist import now accepts IP ranges (IPv4 and IPv6 CIDR) alongside domains.
 
 ### Fixed
 

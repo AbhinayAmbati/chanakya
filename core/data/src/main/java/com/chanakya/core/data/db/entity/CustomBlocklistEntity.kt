@@ -17,8 +17,14 @@ data class CustomBlocklistEntity(
     val domains: String,
     val importedAt: Long,
 ) {
-    /** The domains as a set, skipping blank lines. */
-    fun domainSet(): Set<String> = domains
+    /** The domains as a set, skipping blank lines and any CIDR entries. */
+    fun domainSet(): Set<String> = lines().filterNot { it.contains('/') }.toSet()
+
+    /** The IP ranges as a set, taking only the CIDR entries. */
+    fun ipRangeSet(): Set<String> = lines().filter { it.contains('/') }.toSet()
+
+    /** Every non-blank entry, domains and IP ranges together. */
+    fun lines(): Set<String> = domains
         .lineSequence()
         .map { it.trim() }
         .filter { it.isNotEmpty() }

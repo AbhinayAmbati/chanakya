@@ -32,8 +32,19 @@ class DnsMessageTest {
     }
 
     @Test
-    fun `builds an empty response for a non-A query`() {
+    fun `builds a blocked response with one answer for an AAAA query`() {
         val query = buildQuery("doubleclick.net", type = DnsMessage.TYPE_AAAA)
+        val question = DnsMessage.parseQuestion(query)!!
+
+        val response = DnsMessage.buildBlockedResponse(query, question)
+
+        val answerCount = ((response[6].toInt() and 0xFF) shl 8) or (response[7].toInt() and 0xFF)
+        assertEquals(1, answerCount)
+    }
+
+    @Test
+    fun `builds an empty response for a type it does not synthesise`() {
+        val query = buildQuery("doubleclick.net", type = 65) // HTTPS record
         val question = DnsMessage.parseQuestion(query)!!
 
         val response = DnsMessage.buildBlockedResponse(query, question)

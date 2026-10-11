@@ -40,15 +40,17 @@ import java.net.InetAddress
  * forwarded to an external server.
  *
  * Design notes:
- *  - The device's current **IPv4 DNS servers** are always routed into the tunnel.
+ *  - The device's current DNS servers (**IPv4 and IPv6**) are routed into the tunnel.
  *  - When **IP-level blocking** is on, the curated resolver/blocklist ranges are routed
  *    in as well and simply dropped, which stops apps bypassing DNS filtering.
+ *  - Any range containing a resolver the device actually uses is never routed, so
+ *    enabling IP-level blocking can never break the resolution the device depends on.
  *  - Allowed DNS queries are relayed to the real resolver over a **protected** socket.
- *  - Blocked DNS queries are answered locally with `0.0.0.0`.
+ *  - Blocked DNS queries are answered locally with `0.0.0.0` or `::`.
  *  - Observations are handed to a channel and written to the database by a separate
  *    coroutine, so the packet loop never blocks on I/O.
- *  - The active rules are rebuilt whenever a blocklist or a user rule changes.
- *  - Toggling IP-level blocking changes the routing table, so the tunnel is rebuilt.
+ *  - Rules and IP ranges are rebuilt whenever a blocklist or a user rule changes, and
+ *    a routing change rebuilds the tunnel.
  *
  * The service is started and stopped through [VpnConnectionManager].
  */
@@ -69,8 +71,12 @@ class ChanakyaVpnService : VpnService() {
     private lateinit var blocklistRepository: BlocklistRepository
     private lateinit var userRuleRepository: UserRuleRepository
 
-    /** Cached IP ranges; the asset is read once. */
-    private var ipBlocklistCache: IpBlocklist? = null
+    /** The IP ranges currently in force, kept up to date off the main thread. */
+    @Volatile
+    private var ipBlocklist: IpBlocklist = IpBlocklist.EMPTY
+
+    /** The CIDR strings the current [ipBlocklist] was built from. */
+    private var currentIpCidrs: Set<String> = emptySet()
 
     /** The current IP-level setting, kept in step with the preference. */
     @Volatile
@@ -91,8 +97,15 @@ class ChanakyaVpnService : VpnService() {
         blocklistRepository = BlocklistRepository(this, settingsRepository, database.customBlocklistDao())
         userRuleRepository = UserRuleRepository(database.userRuleDao())
 
-        // Watch the IP-level setting; changing it means rebuilding the routing table.
+        // Seed the bundled ranges immediately so the first tunnel start already has them.
+        val bundled = loadBundledIpBlocklist()
+        ipBlocklist = bundled
+        currentIpCidrs = bundled.cidrStrings().toSet()
+
+        // Rules, IP ranges and the IP-level setting are watched on a scope that survives
+        // a tunnel rebuild (the service scope is cancelled when the tunnel is rebuilt).
         settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scope ->
+            scope.launch { observeRulesAndRanges() }
             scope.launch {
                 settingsRepository.blockIpLevel.distinctUntilChanged().collect { enabled ->
                     blockIpLevelEnabled = enabled
@@ -131,9 +144,7 @@ class ChanakyaVpnService : VpnService() {
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         serviceScope = scope
 
-        // Populate the default blocklists on first run, then keep the rules live.
         scope.launch { blocklistRepository.ensureInitialised() }
-        scope.launch { observeRules() }
 
         // Observations are queued here and drained by the recording coroutine.
         val observationQueue = Channel<DnsObservation>(Channel.UNLIMITED)
@@ -147,7 +158,7 @@ class ChanakyaVpnService : VpnService() {
             descriptor = descriptor,
             ruleEngineHolder = ruleEngineHolder,
             forwarder = forwarder,
-            ipBlocklist = if (tunnelBlockIpLevel) ipBlocklist() else IpBlocklist.EMPTY,
+            ipBlocklist = if (tunnelBlockIpLevel) ipBlocklist else IpBlocklist.EMPTY,
             resolveApp = { port, source, destination ->
                 appResolver.resolveApp(port, source, destination)
             },
@@ -170,8 +181,13 @@ class ChanakyaVpnService : VpnService() {
         startProtection()
     }
 
-    /** Rebuild the rule engine whenever the enabled blocklists or the user rules change. */
-    private suspend fun observeRules() {
+    /**
+     * Rebuild the rule engine and IP ranges whenever a blocklist or user rule changes.
+     *
+     * A change to the IP ranges also rebuilds the tunnel, because routing is fixed at
+     * establish time.
+     */
+    private suspend fun observeRulesAndRanges() {
         combine(
             blocklistRepository.observeEnabledIds(),
             userRuleRepository.observeRules(),
@@ -182,8 +198,15 @@ class ChanakyaVpnService : VpnService() {
                     ruleEngineHolder.update(
                         RuleEngine(BlocklistStore(domains), UserRuleSet(rules)),
                     )
+
+                    val cidrs = blocklistRepository.loadIpCidrs(enabledIds)
+                    if (cidrs != currentIpCidrs) {
+                        currentIpCidrs = cidrs
+                        ipBlocklist = IpBlocklist.parse(cidrs.toList())
+                        if (tunInterface != null && tunnelBlockIpLevel) rebuildTunnel()
+                    }
                 } catch (exception: Exception) {
-                    // Keep the previous engine if a rebuild fails.
+                    // Keep the previous rules and ranges if a rebuild fails.
                 }
             }
     }
@@ -256,8 +279,8 @@ class ChanakyaVpnService : VpnService() {
     /**
      * Build and establish the TUN interface.
      *
-     * Routes cover the current IPv4 DNS servers, plus the curated IP ranges when
-     * IP-level blocking is enabled. Everything else keeps using the real network.
+     * Routes cover the current DNS servers (IPv4 and IPv6), plus the curated IP ranges
+     * when IP-level blocking is enabled. Everything else keeps using the real network.
      */
     private fun establishTunnel(upstreamServers: List<InetAddress>): ParcelFileDescriptor? {
         val builder = Builder()
@@ -265,11 +288,15 @@ class ChanakyaVpnService : VpnService() {
             .setMtu(MTU)
             .addAddress(VPN_ADDRESS, VPN_PREFIX_LENGTH)
 
-        val routedServers = upstreamServers.filterIsInstance<Inet4Address>()
+        val routedServers = upstreamServers.filter { it.hostAddress != null }
         if (routedServers.isEmpty()) {
             FALLBACK_DNS.forEach { builder.addRoute(it, 32) }
         } else {
-            routedServers.forEach { builder.addRoute(it.hostAddress ?: return@forEach, 32) }
+            routedServers.forEach { address ->
+                // Strip any IPv6 scope id; addRoute cannot take one.
+                val host = address.hostAddress?.substringBefore('%') ?: return@forEach
+                builder.addRoute(host, if (address is Inet4Address) 32 else 128)
+            }
         }
 
         if (tunnelBlockIpLevel) {
@@ -293,28 +320,26 @@ class ChanakyaVpnService : VpnService() {
     /**
      * Route each blocked range into the tunnel so it can be dropped.
      *
-     * A resolver the device actually uses is skipped, so enabling this can never break
-     * the resolution the device depends on.
+     * Any range that contains a resolver the device actually uses is skipped, so this
+     * can never break the resolution the device depends on.
      */
     private fun addIpBlockRoutes(builder: Builder, upstreamServers: List<InetAddress>) {
-        val deviceDns = upstreamServers.mapNotNull { it.hostAddress }.toSet()
-        for (cidr in ipBlocklist().cidrStrings()) {
+        val blocklist = ipBlocklist
+        if (blocklist.isEmpty) return
+
+        val protectedCidrs = blocklist.cidrsContaining(upstreamServers.map { it.address })
+        for (cidr in blocklist.cidrStrings()) {
+            if (cidr in protectedCidrs) continue
             val separator = cidr.indexOf('/')
             if (separator <= 0) continue
             val address = cidr.substring(0, separator)
             val prefix = cidr.substring(separator + 1).toIntOrNull() ?: continue
-            if (prefix == 32 && address in deviceDns) continue
             builder.addRoute(address, prefix)
         }
     }
 
-    /** The curated IP ranges, read from assets once. */
-    private fun ipBlocklist(): IpBlocklist = ipBlocklistCache ?: loadIpBlocklist().also {
-        ipBlocklistCache = it
-    }
-
     /** Read and parse the bundled IP ranges. */
-    private fun loadIpBlocklist(): IpBlocklist = try {
+    private fun loadBundledIpBlocklist(): IpBlocklist = try {
         assets.open(IP_BLOCKLIST_ASSET).bufferedReader().use { reader ->
             IpBlocklist.parse(reader.readLines())
         }
