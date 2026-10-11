@@ -55,7 +55,11 @@ object BlocklistParser {
             if (line.isEmpty()) continue
 
             // A slash marks a CIDR; anything else is a domain rule.
-            extractCidr(line)?.let { ipRanges.add(it); continue }
+            val cidr = extractCidr(line)
+            if (cidr != null) {
+                ipRanges.add(cidr)
+                continue
+            }
 
             val domain = extractDomain(line)
             val normalised = domain.lowercase().trim().trimEnd('.')
