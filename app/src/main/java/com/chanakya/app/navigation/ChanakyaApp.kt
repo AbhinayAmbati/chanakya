@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,6 +107,11 @@ private fun ChanakyaBottomBar(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            // Keep the pill clear of the system navigation controls. Material3's
+            // NavigationBar applied this for us; a plain Surface has to ask for it.
+            // navigationBarsPadding covers all edges, so it also handles landscape,
+            // where the controls sit to the side rather than at the bottom.
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
