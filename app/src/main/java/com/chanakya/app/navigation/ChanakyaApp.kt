@@ -1,7 +1,13 @@
 package com.chanakya.app.navigation
 
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -10,15 +16,14 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -54,8 +59,11 @@ private val topLevelDestinations = listOf(
 )
 
 /**
- * The root composable. Hosts the navigation graph and shows a bottom bar on the
+ * The root composable. Hosts the navigation graph and shows a floating bottom bar on the
  * top-level screens.
+ *
+ * The bar is built from a plain [Row] rather than Material3's `NavigationBar`, which is
+ * fixed at 80dp tall - noticeably too heavy for this layout.
  */
 @Composable
 fun ChanakyaApp() {
@@ -72,37 +80,90 @@ fun ChanakyaApp() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
-                // A floating pill: inset from the edges with a soft shadow, so the
-                // content scrolls behind it instead of butting against the screen edge.
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 10.dp,
-                ) {
-                    NavigationBar(
-                        containerColor = Color.Transparent,
-                        tonalElevation = 0.dp,
-                    ) {
-                        topLevelDestinations.forEach { destination ->
-                            val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = { navController.navigateToTopLevel(destination.route) },
-                                icon = { Icon(destination.icon, contentDescription = null) },
-                                label = { Text(stringResource(destination.labelRes)) },
-                            )
-                        }
-                    }
-                }
+                ChanakyaBottomBar(
+                    currentRoute = currentDestination?.route,
+                    onSelect = { route -> navController.navigateToTopLevel(route) },
+                )
             }
         },
     ) { innerPadding ->
         ChanakyaNavHost(
             navController = navController,
             modifier = Modifier.padding(innerPadding),
+        )
+    }
+}
+
+/**
+ * The floating navigation pill: compact, inset from the screen edges, with a soft
+ * shadow so content scrolls behind it.
+ */
+@Composable
+private fun ChanakyaBottomBar(
+    currentRoute: String?,
+    onSelect: (String) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(BAR_HEIGHT)
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            topLevelDestinations.forEach { destination ->
+                val selected = currentRoute == destination.route
+                BottomBarItem(
+                    destination = destination,
+                    selected = selected,
+                    onClick = { onSelect(destination.route) },
+                )
+            }
+        }
+    }
+}
+
+/** One item in the floating bar: a compact icon over a small label. */
+@Composable
+private fun BottomBarItem(
+    destination: TopLevelDestination,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val tint = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Icon(
+            imageVector = destination.icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(ICON_SIZE),
+        )
+        Text(
+            text = stringResource(destination.labelRes),
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 1,
         )
     }
 }
@@ -118,6 +179,12 @@ private fun NavHostController.navigateToTopLevel(route: String) {
         restoreState = true
     }
 }
+
+/** Total height of the bar's content. */
+private val BAR_HEIGHT = 54.dp
+
+/** Size of each navigation icon. */
+private val ICON_SIZE = 22.dp
 
 /**
  * Requests the notification permission once on Android 13+, recording that the prompt
