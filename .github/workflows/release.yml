@@ -64,7 +64,7 @@ jobs:
         run: ./gradlew testReleaseUnitTest --stacktrace
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ inputs.version }}
           name: Chanakya v${{ inputs.version }}
