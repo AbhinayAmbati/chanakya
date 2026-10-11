@@ -185,6 +185,89 @@ object IpPacketCodec {
         return packet
     }
 
+    /**
+     * Build a UDP packet travelling from one endpoint to another.
+     *
+     * The relay needs this rather than [buildReply], because a NAT-style mapping answers
+     * whichever remote address actually replied - which is not necessarily the address
+     * the original packet was sent to.
+     */
+    fun buildUdpPacket(
+        sourceAddress: ByteArray,
+        sourcePort: Int,
+        destinationAddress: ByteArray,
+        destinationPort: Int,
+        payload: ByteArray,
+    ): ByteArray = if (sourceAddress.size == 16) {
+        buildIpv6UdpPacket(sourceAddress, sourcePort, destinationAddress, destinationPort, payload)
+    } else {
+        buildIpv4UdpPacket(sourceAddress, sourcePort, destinationAddress, destinationPort, payload)
+    }
+
+    /** Build an IPv4/UDP packet between explicit endpoints. */
+    private fun buildIpv4UdpPacket(
+        sourceAddress: ByteArray,
+        sourcePort: Int,
+        destinationAddress: ByteArray,
+        destinationPort: Int,
+        payload: ByteArray,
+    ): ByteArray {
+        val totalLength = IPV4_HEADER_LENGTH + UDP_HEADER_LENGTH + payload.size
+        val packet = ByteArray(totalLength)
+
+        packet[0] = 0x45
+        writeShort(packet, 2, totalLength)
+        writeShort(packet, 6, 0x4000)
+        packet[8] = 64
+        packet[9] = PROTOCOL_UDP.toByte()
+        sourceAddress.copyInto(packet, 12)
+        destinationAddress.copyInto(packet, 16)
+        writeShort(packet, 10, checksum(packet, 0, IPV4_HEADER_LENGTH))
+
+        val udpOffset = IPV4_HEADER_LENGTH
+        writeShort(packet, udpOffset, sourcePort)
+        writeShort(packet, udpOffset + 2, destinationPort)
+        writeShort(packet, udpOffset + 4, UDP_HEADER_LENGTH + payload.size)
+        writeShort(packet, udpOffset + 6, 0)
+        payload.copyInto(packet, udpOffset + UDP_HEADER_LENGTH)
+        writeShort(
+            packet,
+            udpOffset + 6,
+            udpChecksumIpv4(packet, udpOffset, UDP_HEADER_LENGTH + payload.size),
+        )
+
+        return packet
+    }
+
+    /** Build an IPv6/UDP packet between explicit endpoints. */
+    private fun buildIpv6UdpPacket(
+        sourceAddress: ByteArray,
+        sourcePort: Int,
+        destinationAddress: ByteArray,
+        destinationPort: Int,
+        payload: ByteArray,
+    ): ByteArray {
+        val udpLength = UDP_HEADER_LENGTH + payload.size
+        val packet = ByteArray(IPV6_HEADER_LENGTH + udpLength)
+
+        packet[0] = 0x60.toByte()
+        writeShort(packet, 4, udpLength)
+        packet[6] = PROTOCOL_UDP.toByte()
+        packet[7] = 64
+        sourceAddress.copyInto(packet, 8)
+        destinationAddress.copyInto(packet, 24)
+
+        val udpOffset = IPV6_HEADER_LENGTH
+        writeShort(packet, udpOffset, sourcePort)
+        writeShort(packet, udpOffset + 2, destinationPort)
+        writeShort(packet, udpOffset + 4, udpLength)
+        writeShort(packet, udpOffset + 6, 0)
+        payload.copyInto(packet, udpOffset + UDP_HEADER_LENGTH)
+        writeShort(packet, udpOffset + 6, udpChecksumIpv6(packet, udpOffset, udpLength))
+
+        return packet
+    }
+
     // ---- IPv6 --------------------------------------------------------------
 
     /** Parse the header of an IPv6 packet. */
