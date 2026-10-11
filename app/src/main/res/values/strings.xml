@@ -62,7 +62,7 @@
     <string name="settings_auto_start">Start on boot</string>
     <string name="settings_auto_start_desc">Restart protection automatically after a reboot.</string>
     <string name="settings_ip_blocking">IP-level blocking</string>
-    <string name="settings_ip_blocking_desc">Coming soon - will also block trackers that bypass DNS using hardcoded addresses.</string>
+    <string name="settings_ip_blocking_desc">Stop apps bypassing DNS filtering with a hardcoded resolver or DNS-over-HTTPS.</string>
     <string name="settings_blocklists">Blocklists</string>
     <string name="settings_ad_id">Advertising ID</string>
     <string name="settings_ad_id_desc">Open Android\'s ad settings to reset or delete your advertising ID.</string>

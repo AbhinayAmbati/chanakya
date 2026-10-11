@@ -16,6 +16,9 @@ object IpPacketCodec {
     /** UDP protocol number. */
     private const val PROTOCOL_UDP = 17
 
+    /** TCP protocol number. */
+    private const val PROTOCOL_TCP = 6
+
     /**
      * A parsed UDP datagram together with the IP addresses it was sent between.
      */
@@ -31,6 +34,66 @@ object IpPacketCodec {
                 destinationPort == other.destinationPort && payload.contentEquals(other.payload)
 
         override fun hashCode(): Int = payload.contentHashCode()
+    }
+
+    /**
+     * The transport-independent parts of an IPv4 packet.
+     *
+     * @param sourceAddress the 4-byte source address.
+     * @param destinationAddress the 4-byte destination address.
+     * @param protocol the IP protocol number.
+     * @param sourcePort the source port for UDP/TCP, or null otherwise.
+     * @param destinationPort the destination port for UDP/TCP, or null otherwise.
+     */
+    data class IpPacketHeader(
+        val sourceAddress: ByteArray,
+        val destinationAddress: ByteArray,
+        val protocol: Int,
+        val sourcePort: Int?,
+        val destinationPort: Int?,
+    ) {
+        override fun equals(other: Any?): Boolean =
+            other is IpPacketHeader && protocol == other.protocol &&
+                sourcePort == other.sourcePort && destinationPort == other.destinationPort &&
+                sourceAddress.contentEquals(other.sourceAddress) &&
+                destinationAddress.contentEquals(other.destinationAddress)
+
+        override fun hashCode(): Int = destinationAddress.contentHashCode()
+    }
+
+    /**
+     * Parse the IPv4 header and, for UDP/TCP, the port numbers.
+     *
+     * The IP-level blocking path only needs to know where a packet is going, not what
+     * it carries, so it uses this rather than the full UDP parser.
+     */
+    fun parseHeader(buffer: ByteArray, length: Int): IpPacketHeader? {
+        if (length < 20) return null
+
+        val version = (buffer[0].toInt() shr 4) and 0x0F
+        if (version != 4) return null
+
+        val headerLength = (buffer[0].toInt() and 0x0F) * 4
+        if (headerLength < 20 || length < headerLength) return null
+
+        val protocol = buffer[9].toInt() and 0xFF
+        val sourceAddress = buffer.copyOfRange(12, 16)
+        val destinationAddress = buffer.copyOfRange(16, 20)
+
+        var sourcePort: Int? = null
+        var destinationPort: Int? = null
+        if ((protocol == PROTOCOL_UDP || protocol == PROTOCOL_TCP) && length >= headerLength + 4) {
+            sourcePort = readUnsignedShort(buffer, headerLength)
+            destinationPort = readUnsignedShort(buffer, headerLength + 2)
+        }
+
+        return IpPacketHeader(
+            sourceAddress = sourceAddress,
+            destinationAddress = destinationAddress,
+            protocol = protocol,
+            sourcePort = sourcePort,
+            destinationPort = destinationPort,
+        )
     }
 
     /**

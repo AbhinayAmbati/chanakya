@@ -12,11 +12,12 @@ import com.chanakya.core.data.repository.EventRecorder
 import com.chanakya.core.data.repository.UserRuleRepository
 import com.chanakya.core.vpn.attribution.AppResolver
 import com.chanakya.core.vpn.dns.DnsForwarder
-import com.chanakya.core.vpn.dns.DnsInterceptor
+import com.chanakya.core.vpn.dns.TunInterceptor
 import com.chanakya.core.vpn.model.DnsObservation
 import com.chanakya.core.vpn.model.VpnState
 import com.chanakya.core.vpn.model.VpnStatus
 import com.chanakya.core.vpn.rules.BlocklistStore
+import com.chanakya.core.vpn.rules.IpBlocklist
 import com.chanakya.core.vpn.rules.RuleEngine
 import com.chanakya.core.vpn.rules.RuleEngineHolder
 import com.chanakya.core.vpn.rules.UserRuleSet
@@ -28,6 +29,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -38,14 +40,15 @@ import java.net.InetAddress
  * forwarded to an external server.
  *
  * Design notes:
- *  - Only the device's current **IPv4 DNS servers** are routed into the tunnel, so
- *    ordinary traffic is untouched and the app costs almost nothing to run.
- *  - Allowed queries are relayed to the real resolver over a **protected** socket.
- *  - Blocked queries are answered locally with `0.0.0.0`.
+ *  - The device's current **IPv4 DNS servers** are always routed into the tunnel.
+ *  - When **IP-level blocking** is on, the curated resolver/blocklist ranges are routed
+ *    in as well and simply dropped, which stops apps bypassing DNS filtering.
+ *  - Allowed DNS queries are relayed to the real resolver over a **protected** socket.
+ *  - Blocked DNS queries are answered locally with `0.0.0.0`.
  *  - Observations are handed to a channel and written to the database by a separate
  *    coroutine, so the packet loop never blocks on I/O.
- *  - The active rules are rebuilt whenever a blocklist is toggled or a user rule
- *    changes, and swapped in atomically - no VPN restart required.
+ *  - The active rules are rebuilt whenever a blocklist or a user rule changes.
+ *  - Toggling IP-level blocking changes the routing table, so the tunnel is rebuilt.
  *
  * The service is started and stopped through [VpnConnectionManager].
  */
@@ -53,6 +56,7 @@ class ChanakyaVpnService : VpnService() {
 
     private var tunInterface: ParcelFileDescriptor? = null
     private var serviceScope: CoroutineScope? = null
+    private var settingsScope: CoroutineScope? = null
     private var interceptionJob: Job? = null
     private var recordingJob: Job? = null
 
@@ -65,6 +69,16 @@ class ChanakyaVpnService : VpnService() {
     private lateinit var blocklistRepository: BlocklistRepository
     private lateinit var userRuleRepository: UserRuleRepository
 
+    /** Cached IP ranges; the asset is read once. */
+    private var ipBlocklistCache: IpBlocklist? = null
+
+    /** The current IP-level setting, kept in step with the preference. */
+    @Volatile
+    private var blockIpLevelEnabled = false
+
+    /** The value the running tunnel was actually built with. */
+    private var tunnelBlockIpLevel = false
+
     /** How many trackers this session has blocked, for the notification. */
     private var sessionBlockedCount = 0
 
@@ -76,6 +90,16 @@ class ChanakyaVpnService : VpnService() {
         settingsRepository = SettingsRepository(this)
         blocklistRepository = BlocklistRepository(this, settingsRepository, database.customBlocklistDao())
         userRuleRepository = UserRuleRepository(database.userRuleDao())
+
+        // Watch the IP-level setting; changing it means rebuilding the routing table.
+        settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scope ->
+            scope.launch {
+                settingsRepository.blockIpLevel.distinctUntilChanged().collect { enabled ->
+                    blockIpLevelEnabled = enabled
+                    if (tunInterface != null && enabled != tunnelBlockIpLevel) rebuildTunnel()
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -87,7 +111,7 @@ class ChanakyaVpnService : VpnService() {
         return START_STICKY
     }
 
-    /** Establish the tunnel and begin intercepting DNS. */
+    /** Establish the tunnel and begin intercepting traffic. */
     private fun startProtection() {
         if (tunInterface != null) return
         VpnStatus.update(VpnState.Starting)
@@ -95,6 +119,7 @@ class ChanakyaVpnService : VpnService() {
         startForeground(VpnNotification.NOTIFICATION_ID, notification.build(sessionBlockedCount))
 
         val upstreamServers = currentDnsServers()
+        tunnelBlockIpLevel = blockIpLevelEnabled
         val descriptor = establishTunnel(upstreamServers)
         if (descriptor == null) {
             VpnStatus.update(VpnState.Error("Could not establish the tunnel"))
@@ -118,10 +143,11 @@ class ChanakyaVpnService : VpnService() {
         scope.launch { seedAppMetadata() }
 
         val forwarder = DnsForwarder(upstreamServers) { socket -> protect(socket) }
-        val interceptor = DnsInterceptor(
+        val interceptor = TunInterceptor(
             descriptor = descriptor,
             ruleEngineHolder = ruleEngineHolder,
             forwarder = forwarder,
+            ipBlocklist = if (tunnelBlockIpLevel) ipBlocklist() else IpBlocklist.EMPTY,
             resolveApp = { port, source, destination ->
                 appResolver.resolveApp(port, source, destination)
             },
@@ -136,8 +162,15 @@ class ChanakyaVpnService : VpnService() {
     }
 
     /**
-     * Rebuild the rule engine whenever the enabled blocklists or the user rules change.
+     * Rebuild the tunnel so a routing change takes effect. Routes can only be set before
+     * `establish()`, so a change means tearing down and standing the interface back up.
      */
+    private fun rebuildTunnel() {
+        tearDownTunnel()
+        startProtection()
+    }
+
+    /** Rebuild the rule engine whenever the enabled blocklists or the user rules change. */
     private suspend fun observeRules() {
         combine(
             blocklistRepository.observeEnabledIds(),
@@ -181,8 +214,8 @@ class ChanakyaVpnService : VpnService() {
         }
     }
 
-    /** Tear the tunnel down and stop the service. */
-    private fun stopProtection() {
+    /** Cancel the tunnel's jobs and close the interface, leaving the service running. */
+    private fun tearDownTunnel() {
         interceptionJob?.cancel()
         recordingJob?.cancel()
         interceptionJob = null
@@ -197,7 +230,11 @@ class ChanakyaVpnService : VpnService() {
             // Closing an already-closed descriptor is harmless.
         }
         tunInterface = null
+    }
 
+    /** Tear the tunnel down and stop the service. */
+    private fun stopProtection() {
+        tearDownTunnel()
         VpnStatus.update(VpnState.Stopped)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -211,14 +248,16 @@ class ChanakyaVpnService : VpnService() {
 
     override fun onDestroy() {
         stopProtection()
+        settingsScope?.cancel()
+        settingsScope = null
         super.onDestroy()
     }
 
     /**
      * Build and establish the TUN interface.
      *
-     * Routes are added only for the current IPv4 DNS servers, so all other traffic
-     * continues to use the real network.
+     * Routes cover the current IPv4 DNS servers, plus the curated IP ranges when
+     * IP-level blocking is enabled. Everything else keeps using the real network.
      */
     private fun establishTunnel(upstreamServers: List<InetAddress>): ParcelFileDescriptor? {
         val builder = Builder()
@@ -226,13 +265,15 @@ class ChanakyaVpnService : VpnService() {
             .setMtu(MTU)
             .addAddress(VPN_ADDRESS, VPN_PREFIX_LENGTH)
 
-        // Route each upstream DNS server into the tunnel so we can see the queries.
         val routedServers = upstreamServers.filterIsInstance<Inet4Address>()
         if (routedServers.isEmpty()) {
-            // Fall back to well-known resolvers if we could not read the device's own.
             FALLBACK_DNS.forEach { builder.addRoute(it, 32) }
         } else {
             routedServers.forEach { builder.addRoute(it.hostAddress ?: return@forEach, 32) }
+        }
+
+        if (tunnelBlockIpLevel) {
+            addIpBlockRoutes(builder, upstreamServers)
         }
 
         // Keep the app's own upstream sockets out of the tunnel.
@@ -247,6 +288,38 @@ class ChanakyaVpnService : VpnService() {
         } catch (exception: Exception) {
             null
         }
+    }
+
+    /**
+     * Route each blocked range into the tunnel so it can be dropped.
+     *
+     * A resolver the device actually uses is skipped, so enabling this can never break
+     * the resolution the device depends on.
+     */
+    private fun addIpBlockRoutes(builder: Builder, upstreamServers: List<InetAddress>) {
+        val deviceDns = upstreamServers.mapNotNull { it.hostAddress }.toSet()
+        for (cidr in ipBlocklist().cidrStrings()) {
+            val separator = cidr.indexOf('/')
+            if (separator <= 0) continue
+            val address = cidr.substring(0, separator)
+            val prefix = cidr.substring(separator + 1).toIntOrNull() ?: continue
+            if (prefix == 32 && address in deviceDns) continue
+            builder.addRoute(address, prefix)
+        }
+    }
+
+    /** The curated IP ranges, read from assets once. */
+    private fun ipBlocklist(): IpBlocklist = ipBlocklistCache ?: loadIpBlocklist().also {
+        ipBlocklistCache = it
+    }
+
+    /** Read and parse the bundled IP ranges. */
+    private fun loadIpBlocklist(): IpBlocklist = try {
+        assets.open(IP_BLOCKLIST_ASSET).bufferedReader().use { reader ->
+            IpBlocklist.parse(reader.readLines())
+        }
+    } catch (exception: Exception) {
+        IpBlocklist.EMPTY
     }
 
     /** The device's current DNS servers, read from the active network. */
@@ -269,6 +342,7 @@ class ChanakyaVpnService : VpnService() {
         private const val VPN_ADDRESS = "10.111.222.2"
         private const val VPN_PREFIX_LENGTH = 32
         private const val UNKNOWN_PACKAGE = "unknown"
+        private const val IP_BLOCKLIST_ASSET = "blocklists/ip_ranges.txt"
         private val FALLBACK_DNS = listOf("8.8.8.8", "1.1.1.1")
     }
 }

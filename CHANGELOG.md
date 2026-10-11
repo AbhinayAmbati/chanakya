@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   networks and apps.
 - App detail: domains governed by a user rule are now marked, and app icons replace the
   letter avatars across the app.
+- IP-level blocking: apps can no longer bypass DNS filtering via a hardcoded resolver or
+  DNS-over-HTTPS. Blocked ranges are routed into the tunnel and dropped, and the device's
+  own resolver is always excluded.
 
 ### Fixed
 

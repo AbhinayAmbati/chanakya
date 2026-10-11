@@ -91,8 +91,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     title = stringResource(R.string.settings_ip_blocking),
                     description = stringResource(R.string.settings_ip_blocking_desc),
                     checked = blockIp,
-                    onCheckedChange = {},
-                    enabled = false,
+                    onCheckedChange = viewModel::setBlockIpLevel,
                 )
             }
         }

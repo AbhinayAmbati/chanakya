@@ -3,6 +3,7 @@ package com.chanakya.core.vpn.dns
 import android.os.ParcelFileDescriptor
 import com.chanakya.core.vpn.model.DnsObservation
 import com.chanakya.core.vpn.model.ResolvedApp
+import com.chanakya.core.vpn.rules.IpBlocklist
 import com.chanakya.core.vpn.rules.RuleDecision
 import com.chanakya.core.vpn.rules.RuleEngineHolder
 import kotlinx.coroutines.CoroutineScope
@@ -15,24 +16,31 @@ import java.io.IOException
 import java.net.InetAddress
 
 /**
- * Reads DNS queries off the TUN interface, applies the current rules and writes a
- * response back.
+ * Reads packets off the TUN interface and applies both layers of filtering.
  *
- * The read loop is the hot path of the whole application, so it holds no locks and
- * does no database work: it attributes the query to an app synchronously (the socket
- * is only identifiable while the query is in flight), emits a [DnsObservation] and
- * moves on. Persistence happens on a separate coroutine.
+ * Two things happen here:
+ *
+ *  1. **DNS filtering.** A UDP query to port 53 is parsed, attributed to an app, run
+ *     through the rule engine and either answered locally with `0.0.0.0` or relayed to
+ *     the real resolver.
+ *  2. **IP-level fallback.** A packet destined for a blocked range is dropped and
+ *     logged. Dropping *is* the block: the connection is never completed, so an app
+ *     that tried to bypass DNS by talking to a hardcoded address simply fails.
+ *
+ * The loop holds no locks and does no database work; persistence happens elsewhere.
  *
  * @param descriptor the TUN interface file descriptor from `VpnService.Builder.establish`.
  * @param ruleEngineHolder the live rules; read on every query so changes apply instantly.
- * @param forwarder forwards allowed queries to the real resolver.
- * @param resolveApp attributes an in-flight query to the app that made it.
- * @param onObservation invoked for every query, allowed or blocked.
+ * @param forwarder forwards allowed DNS queries to the real resolver.
+ * @param ipBlocklist the ranges to drop; [IpBlocklist.EMPTY] when IP-level blocking is off.
+ * @param resolveApp attributes an in-flight packet to the app that sent it.
+ * @param onObservation invoked for every query and every dropped packet.
  */
-class DnsInterceptor(
+class TunInterceptor(
     descriptor: ParcelFileDescriptor,
     private val ruleEngineHolder: RuleEngineHolder,
     private val forwarder: DnsForwarder,
+    private val ipBlocklist: IpBlocklist,
     private val resolveApp: (sourcePort: Int, sourceAddress: InetAddress, destinationAddress: InetAddress) -> ResolvedApp?,
     private val onObservation: (DnsObservation) -> Unit,
 ) {
@@ -62,8 +70,22 @@ class DnsInterceptor(
         }
     }
 
-    /** Process one packet read from the interface. */
+    /** Route one packet to the right handling path. */
     private suspend fun handlePacket(buffer: ByteArray, length: Int) {
+        val header = IpPacketCodec.parseHeader(buffer, length) ?: return
+
+        // DNS takes priority: a resolver address may also be in the IP blocklist.
+        if (header.protocol == PROTOCOL_UDP && header.destinationPort == DNS_PORT) {
+            handleDnsQuery(buffer, length)
+            return
+        }
+
+        if (ipBlocklist.isEmpty || !ipBlocklist.contains(header.destinationAddress)) return
+        handleIpBlock(header)
+    }
+
+    /** Parse, decide and answer a DNS query. */
+    private suspend fun handleDnsQuery(buffer: ByteArray, length: Int) {
         val datagram = IpPacketCodec.parse(buffer, length) ?: return
         if (datagram.destinationPort != DNS_PORT) return
 
@@ -75,20 +97,17 @@ class DnsInterceptor(
             InetAddress.getByAddress(datagram.sourceAddress),
             InetAddress.getByAddress(datagram.destinationAddress),
         )
-        val uid = resolved?.uid ?: UNKNOWN_UID
-        val packageName = resolved?.packageName
-
         val blocked = ruleEngineHolder.decide(
             question.name,
-            packageName ?: UNKNOWN_PACKAGE,
+            resolved?.packageName ?: UNKNOWN_PACKAGE,
         ) == RuleDecision.BLOCK
 
         onObservation(
             DnsObservation(
                 domain = question.name,
                 blocked = blocked,
-                uid = uid,
-                packageName = packageName,
+                uid = resolved?.uid ?: UNKNOWN_UID,
+                packageName = resolved?.packageName,
                 sourcePort = datagram.sourcePort,
                 timestamp = System.currentTimeMillis(),
             ),
@@ -105,8 +124,35 @@ class DnsInterceptor(
         output.write(IpPacketCodec.buildReply(datagram, responsePayload))
     }
 
+    /** Log and drop a packet destined for a blocked IP range. */
+    private fun handleIpBlock(header: IpPacketCodec.IpPacketHeader) {
+        val sourcePort = header.sourcePort ?: return
+        val resolved = resolveApp(
+            sourcePort,
+            InetAddress.getByAddress(header.sourceAddress),
+            InetAddress.getByAddress(header.destinationAddress),
+        )
+
+        onObservation(
+            DnsObservation(
+                domain = formatIpv4(header.destinationAddress),
+                blocked = true,
+                uid = resolved?.uid ?: UNKNOWN_UID,
+                packageName = resolved?.packageName,
+                sourcePort = sourcePort,
+                timestamp = System.currentTimeMillis(),
+            ),
+        )
+        // No response is written, so the connection never completes - that is the block.
+    }
+
+    /** Render a 4-byte address as dotted quad, for logging and display. */
+    private fun formatIpv4(address: ByteArray): String =
+        address.joinToString(".") { (it.toInt() and 0xFF).toString() }
+
     private companion object {
         const val DNS_PORT = 53
+        const val PROTOCOL_UDP = 17
         const val MAX_PACKET_SIZE = 32_767
         const val UNKNOWN_UID = -1
         const val UNKNOWN_PACKAGE = "unknown"
