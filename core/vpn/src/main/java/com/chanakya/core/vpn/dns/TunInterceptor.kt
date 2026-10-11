@@ -3,6 +3,8 @@ package com.chanakya.core.vpn.dns
 import android.os.ParcelFileDescriptor
 import com.chanakya.core.vpn.model.DnsObservation
 import com.chanakya.core.vpn.model.ResolvedApp
+import com.chanakya.core.vpn.relay.TcpRelay
+import com.chanakya.core.vpn.relay.UdpRelay
 import com.chanakya.core.vpn.rules.IpBlocklist
 import com.chanakya.core.vpn.rules.RuleDecision
 import com.chanakya.core.vpn.rules.RuleEngineHolder
@@ -37,6 +39,10 @@ import java.net.InetAddress
  * @param onObservation invoked for every query and every dropped packet.
  * @param onRelayResult invoked for every allowed query with whether relaying it
  *   upstream succeeded. Used to notice when relaying is broken and back out.
+ * @param udpRelay forwards UDP when the tunnel routes everything; null in the default
+ *   mode, where the tunnel carries DNS and little else.
+ * @param tcpRelay forwards TCP when the tunnel routes everything; null in the default
+ *   mode, where TCP is refused outright.
  */
 class TunInterceptor(
     descriptor: ParcelFileDescriptor,
@@ -46,10 +52,22 @@ class TunInterceptor(
     private val resolveApp: (sourcePort: Int, sourceAddress: InetAddress, destinationAddress: InetAddress) -> ResolvedApp?,
     private val onObservation: (DnsObservation) -> Unit,
     private val onRelayResult: (Boolean) -> Unit = {},
+    private val udpRelay: UdpRelay? = null,
+    private val tcpRelay: TcpRelay? = null,
 ) {
 
     private val input = FileInputStream(descriptor.fileDescriptor)
     private val output = FileOutputStream(descriptor.fileDescriptor)
+
+    /** Serialises writes to the tunnel, which the relay workers share with the loop. */
+    private val writeLock = Any()
+
+    /** Write one finished packet into the tunnel. */
+    fun emitPacket(packet: ByteArray) {
+        synchronized(writeLock) {
+            output.write(packet)
+        }
+    }
 
     /**
      * Start the interception loop on [scope].
@@ -83,23 +101,41 @@ class TunInterceptor(
             return
         }
 
-        // The tunnel carries no TCP streams, so anything TCP that lands here is reset
-        // immediately rather than left to hang. That is what defuses Android's Private
-        // DNS: its DNS-over-TLS probe arrives on port 853, fails at once, and the
-        // platform falls back to the plain port-53 DNS we do answer.
-        if (header.protocol == PROTOCOL_TCP) {
-            handleTcpReset(buffer, length)
+        // Anything in a blocked range is dropped before a relay can carry it.
+        if (!ipBlocklist.isEmpty && ipBlocklist.contains(header.destinationAddress)) {
+            handleIpBlock(header)
             return
         }
 
-        if (ipBlocklist.isEmpty || !ipBlocklist.contains(header.destinationAddress)) return
-        handleIpBlock(header)
+        // Full-tunnel mode: everything else is forwarded over the real network.
+        val udp = udpRelay
+        if (udp != null && header.protocol == PROTOCOL_UDP) {
+            IpPacketCodec.parse(buffer, length)?.let { udp.forward(it) }
+            return
+        }
+
+        val tcp = tcpRelay
+        if (tcp != null) {
+            if (header.protocol == PROTOCOL_TCP) {
+                IpPacketCodec.parseTcp(buffer, length)?.let { tcp.handle(it) }
+            }
+            // Nothing else can be carried; ICMP and the like are left alone.
+            return
+        }
+
+        // Default mode: the tunnel carries no TCP streams, so a TCP segment that lands
+        // here is reset immediately rather than left to hang. That is what defuses
+        // Android's Private DNS, whose probe arrives on port 853 and then falls back to
+        // the plain port-53 DNS we do answer.
+        if (header.protocol == PROTOCOL_TCP) {
+            handleTcpReset(buffer, length)
+        }
     }
 
     /** Refuse a TCP connection by resetting it. */
     private fun handleTcpReset(buffer: ByteArray, length: Int) {
         val segment = IpPacketCodec.parseTcp(buffer, length) ?: return
-        output.write(IpPacketCodec.buildTcpReset(segment))
+        emitPacket(IpPacketCodec.buildTcpReset(segment))
     }
 
     /** Parse, decide and answer a DNS query. */
@@ -143,7 +179,7 @@ class TunInterceptor(
             forwardResult ?: DnsMessage.buildServFailResponse(datagram.payload, question)
         }
 
-        output.write(IpPacketCodec.buildReply(datagram, responsePayload))
+        emitPacket(IpPacketCodec.buildReply(datagram, responsePayload))
 
         // Report the outcome last: the fail-open path tears the tunnel down, so it must
         // not run in the middle of writing a reply.

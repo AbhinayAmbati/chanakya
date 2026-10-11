@@ -10,6 +10,9 @@ import androidx.navigation.navArgument
 import com.chanakya.app.ui.appdetail.AppDetailScreen
 import com.chanakya.app.ui.apps.AppsScreen
 import com.chanakya.app.ui.home.HomeScreen
+import com.chanakya.app.ui.legal.AboutScreen
+import com.chanakya.app.ui.legal.PrivacyScreen
+import com.chanakya.app.ui.legal.TermsScreen
 import com.chanakya.app.ui.reports.ReportsScreen
 import com.chanakya.app.ui.settings.SettingsScreen
 
@@ -47,7 +50,20 @@ fun ChanakyaNavHost(
             ReportsScreen()
         }
         composable(Destinations.SETTINGS) {
-            SettingsScreen()
+            SettingsScreen(
+                onOpenAbout = { navController.navigate(Destinations.ABOUT) },
+                onOpenTerms = { navController.navigate(Destinations.TERMS) },
+                onOpenPrivacy = { navController.navigate(Destinations.PRIVACY) },
+            )
+        }
+        composable(Destinations.ABOUT) {
+            AboutScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.TERMS) {
+            TermsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.PRIVACY) {
+            PrivacyScreen(onBack = { navController.popBackStack() })
         }
     }
 }

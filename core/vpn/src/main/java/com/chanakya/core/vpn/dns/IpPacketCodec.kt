@@ -261,6 +261,13 @@ object IpPacketCodec {
     private const val TCP_FLAG_RST = 0x04
     private const val TCP_FLAG_ACK = 0x10
 
+    /** TCP flag bits, exposed for the relay that builds segments. */
+    const val TCP_FIN = 0x01
+    const val TCP_SYN = 0x02
+    const val TCP_RST = 0x04
+    const val TCP_PSH = 0x08
+    const val TCP_ACK = 0x10
+
     /**
      * A parsed TCP segment, reduced to the fields a reset reply needs.
      *
@@ -268,6 +275,7 @@ object IpPacketCodec {
      * @param acknowledgmentNumber the sender's acknowledgement, when [flags] has ACK set.
      * @param flags the raw TCP flag byte.
      * @param payloadLength how many bytes of payload followed the header.
+     * @param payload the payload bytes themselves, empty when there were none.
      */
     data class TcpSegment(
         val sourceAddress: ByteArray,
@@ -278,6 +286,7 @@ object IpPacketCodec {
         val acknowledgmentNumber: Long,
         val flags: Int,
         val payloadLength: Int,
+        val payload: ByteArray,
     ) {
         override fun equals(other: Any?): Boolean =
             other is TcpSegment && sourcePort == other.sourcePort &&
@@ -344,6 +353,10 @@ object IpPacketCodec {
             acknowledgmentNumber = readUnsignedInt(buffer, tcpOffset + 8),
             flags = buffer[tcpOffset + 13].toInt() and 0xFF,
             payloadLength = payloadLength,
+            payload = buffer.copyOfRange(
+                tcpOffset + headerLength,
+                tcpOffset + headerLength + payloadLength,
+            ),
         )
     }
 
@@ -421,6 +434,71 @@ object IpPacketCodec {
     }
 
     // ---- Helpers -----------------------------------------------------------
+
+    /**
+     * Build a TCP packet travelling from [sourceAddress] to [destinationAddress].
+     *
+     * Used by the relay to speak TCP on behalf of the tunnel: handshake, acknowledgements
+     * and data all go out through here. Checksums are computed for the right family.
+     */
+    fun buildTcpPacket(
+        sourceAddress: ByteArray,
+        destinationAddress: ByteArray,
+        sourcePort: Int,
+        destinationPort: Int,
+        sequenceNumber: Long,
+        acknowledgmentNumber: Long,
+        flags: Int,
+        payload: ByteArray = ByteArray(0),
+    ): ByteArray {
+        val ipv6 = sourceAddress.size == 16
+        val ipHeaderLength = if (ipv6) IPV6_HEADER_LENGTH else IPV4_HEADER_LENGTH
+        val tcpLength = TCP_HEADER_LENGTH + payload.size
+        val totalLength = ipHeaderLength + tcpLength
+        val packet = ByteArray(totalLength)
+
+        if (ipv6) {
+            packet[0] = 0x60.toByte()
+            writeShort(packet, 4, tcpLength)
+            packet[6] = PROTOCOL_TCP.toByte()
+            packet[7] = 64
+            sourceAddress.copyInto(packet, 8)
+            destinationAddress.copyInto(packet, 24)
+        } else {
+            packet[0] = 0x45
+            writeShort(packet, 2, totalLength)
+            writeShort(packet, 6, 0x4000)
+            packet[8] = 64
+            packet[9] = PROTOCOL_TCP.toByte()
+            sourceAddress.copyInto(packet, 12)
+            destinationAddress.copyInto(packet, 16)
+            writeShort(packet, 10, checksum(packet, 0, IPV4_HEADER_LENGTH))
+        }
+
+        val tcpOffset = ipHeaderLength
+        writeShort(packet, tcpOffset, sourcePort)
+        writeShort(packet, tcpOffset + 2, destinationPort)
+        writeInt(packet, tcpOffset + 4, sequenceNumber)
+        writeInt(packet, tcpOffset + 8, acknowledgmentNumber)
+        packet[tcpOffset + 12] = (5 shl 4).toByte()
+        packet[tcpOffset + 13] = flags.toByte()
+        writeShort(packet, tcpOffset + 14, TCP_WINDOW)
+        writeShort(packet, tcpOffset + 16, 0)
+        writeShort(packet, tcpOffset + 18, 0)
+        payload.copyInto(packet, tcpOffset + TCP_HEADER_LENGTH)
+
+        val tcpChecksum = if (ipv6) {
+            tcpChecksumIpv6(packet, tcpOffset, tcpLength)
+        } else {
+            tcpChecksumIpv4(packet, tcpOffset, tcpLength)
+        }
+        writeShort(packet, tcpOffset + 16, tcpChecksum)
+
+        return packet
+    }
+
+    /** The receive window the relay advertises. Large and never adjusted - it is a proxy. */
+    const val TCP_WINDOW = 65535
 
     /** The IP version of a packet, or 0 when it is too short to tell. */
     private fun ipVersion(buffer: ByteArray, length: Int): Int {

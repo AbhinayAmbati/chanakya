@@ -31,6 +31,7 @@ class SettingsRepository(private val context: Context) {
         val AD_ID_REMINDER = booleanPreferencesKey("ad_id_reminder")
         val NOTIFICATION_PROMPT_SHOWN = booleanPreferencesKey("notification_prompt_shown")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val FULL_TUNNEL = booleanPreferencesKey("full_tunnel")
     }
 
     /** Whether the local VPN should be running. */
@@ -44,6 +45,16 @@ class SettingsRepository(private val context: Context) {
     /** Whether IP-level (non-DNS) blocking is enabled. */
     val blockIpLevel: Flow<Boolean> =
         context.settingsDataStore.data.map { it[Keys.BLOCK_IP_LEVEL] ?: false }
+
+    /**
+     * Whether every packet is routed through the tunnel rather than only DNS.
+     *
+     * Needed for Android's Private DNS, whose DNS-over-TLS probe cannot be answered by a
+     * tunnel that only speaks plain DNS. Routing everything lets the probe be carried
+     * like any other connection.
+     */
+    val fullTunnel: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[Keys.FULL_TUNNEL] ?: false }
 
     /** The set of enabled blocklist identifiers. */
     val enabledBlocklists: Flow<Set<String>> =
@@ -74,6 +85,11 @@ class SettingsRepository(private val context: Context) {
     /** Enable or disable auto-start on boot. */
     suspend fun setAutoStartOnBoot(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.AUTO_START_ON_BOOT] = enabled }
+    }
+
+    /** Whether to route all traffic through the tunnel, not just DNS. */
+    suspend fun setFullTunnel(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.FULL_TUNNEL] = enabled }
     }
 
     /** Enable or disable IP-level blocking. */

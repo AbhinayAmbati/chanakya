@@ -40,6 +40,10 @@ class SettingsViewModel(
     val blockIpLevel: StateFlow<Boolean> = settingsRepository.blockIpLevel
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    /** Whether every packet is routed through the tunnel, not just DNS. */
+    val fullTunnel: StateFlow<Boolean> = settingsRepository.fullTunnel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     /** Whether the periodic advertising-ID reminder is enabled. */
     val adIdReminder: StateFlow<Boolean> = settingsRepository.adIdReminder
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -80,6 +84,11 @@ class SettingsViewModel(
     /** Persist the IP-level blocking preference. */
     fun setBlockIpLevel(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setBlockIpLevel(enabled) }
+    }
+
+    /** Persist the full-tunnel preference. */
+    fun setFullTunnel(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setFullTunnel(enabled) }
     }
 
     /** Toggle the advertising-ID reminder and (de)register its worker. */

@@ -18,6 +18,15 @@ object Destinations {
     /** Settings. */
     const val SETTINGS = "settings"
 
+    /** The about screen. */
+    const val ABOUT = "about"
+
+    /** The terms of use. */
+    const val TERMS = "terms"
+
+    /** The privacy policy. */
+    const val PRIVACY = "privacy"
+
     /** The per-app detail screen. */
     const val APP_DETAIL = "app/{packageName}"
 

@@ -51,13 +51,19 @@ import com.chanakya.core.designsystem.theme.MonoTextStyle
  * tools and an about section.
  */
 @Composable
-fun SettingsScreen(modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    onOpenAbout: () -> Unit,
+    onOpenTerms: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val container = LocalAppContainer.current
     val viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.settings(container))
     val context = LocalContext.current
 
     val autoStart by viewModel.autoStartOnBoot.collectAsStateWithLifecycle()
     val blockIp by viewModel.blockIpLevel.collectAsStateWithLifecycle()
+    val fullTunnel by viewModel.fullTunnel.collectAsStateWithLifecycle()
     val adIdReminder by viewModel.adIdReminder.collectAsStateWithLifecycle()
     val blocklists by viewModel.blocklists.collectAsStateWithLifecycle()
     val userRules by viewModel.userRules.collectAsStateWithLifecycle()
@@ -117,6 +123,13 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     description = stringResource(R.string.settings_ip_blocking_desc),
                     checked = blockIp,
                     onCheckedChange = viewModel::setBlockIpLevel,
+                )
+                Spacer(Modifier.height(16.dp))
+                SettingToggle(
+                    title = stringResource(R.string.settings_full_tunnel),
+                    description = stringResource(R.string.settings_full_tunnel_desc),
+                    checked = fullTunnel,
+                    onCheckedChange = viewModel::setFullTunnel,
                 )
             }
         }
@@ -189,11 +202,35 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
 
         item { SectionHeader(title = stringResource(R.string.settings_about)) }
         item {
-            ChanakyaCard {
+            ChanakyaCard(onClick = onOpenAbout) {
                 Text(
                     text = stringResource(R.string.settings_about_desc, BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.settings_about_open),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            }
+        }
+        item {
+            ChanakyaCard(onClick = onOpenTerms) {
+                Text(
+                    text = stringResource(R.string.settings_terms),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        item {
+            ChanakyaCard(onClick = onOpenPrivacy) {
+                Text(
+                    text = stringResource(R.string.settings_privacy),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }

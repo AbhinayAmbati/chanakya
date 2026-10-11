@@ -24,12 +24,16 @@ import com.chanakya.core.vpn.rules.BlocklistStore
 import com.chanakya.core.vpn.rules.IpBlocklist
 import com.chanakya.core.vpn.rules.RuleEngine
 import com.chanakya.core.vpn.rules.RuleEngineHolder
+import com.chanakya.core.vpn.relay.TcpRelay
+import com.chanakya.core.vpn.relay.UdpRelay
 import com.chanakya.core.vpn.rules.UserRuleSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
@@ -88,6 +92,17 @@ class ChanakyaVpnService : VpnService() {
 
     private var tunnelBlockIpLevel = false
 
+    /** Whether every packet is routed through the tunnel, read from settings. */
+    @Volatile
+    private var fullTunnelEnabled = false
+
+    /** The value the current tunnel was built with. */
+    private var tunnelFullTunnel = false
+
+    private var udpRelay: UdpRelay? = null
+    private var tcpRelay: TcpRelay? = null
+    private var sweepJob: Job? = null
+
     private var sessionObservations = 0
     private var sessionBlocked = 0
     private var routedDnsServers = 0
@@ -124,6 +139,12 @@ class ChanakyaVpnService : VpnService() {
                     if (tunInterface != null && enabled != tunnelBlockIpLevel) rebuildTunnel()
                 }
             }
+            scope.launch {
+                settingsRepository.fullTunnel.distinctUntilChanged().collect { enabled ->
+                    fullTunnelEnabled = enabled
+                    if (tunInterface != null && enabled != tunnelFullTunnel) rebuildTunnel()
+                }
+            }
         }
     }
 
@@ -148,6 +169,7 @@ class ChanakyaVpnService : VpnService() {
         underlyingNetwork = currentUnderlyingNetwork()
         val upstreamServers = currentUpstreamResolvers()
         tunnelBlockIpLevel = blockIpLevelEnabled
+        tunnelFullTunnel = fullTunnelEnabled
         val descriptor = establishTunnel(upstreamServers)
         if (descriptor == null) {
             VpnStatus.update(VpnState.Error("Could not establish the tunnel"))
@@ -171,6 +193,24 @@ class ChanakyaVpnService : VpnService() {
         val forwarders = upstreamServers.ifEmpty { FALLBACK_RESOLVERS }
         val forwarder = DnsForwarder(forwarders) { socket -> protect(socket) }
 
+        // The relays write back into the tunnel, which the interceptor owns. The holder
+        // is filled in below, before any packet can arrive.
+        var packetSink: TunInterceptor? = null
+        val emitToTunnel: (ByteArray) -> Unit = { packet -> packetSink?.emitPacket(packet) }
+
+        val udp = if (tunnelFullTunnel) {
+            UdpRelay(scope, { socket -> protect(socket) }, emitToTunnel)
+        } else {
+            null
+        }
+        val tcp = if (tunnelFullTunnel) {
+            TcpRelay(scope, { socket -> protect(socket) }, emitToTunnel)
+        } else {
+            null
+        }
+        udpRelay = udp
+        tcpRelay = tcp
+
         val interceptor = TunInterceptor(
             descriptor = descriptor,
             ruleEngineHolder = ruleEngineHolder,
@@ -186,8 +226,23 @@ class ChanakyaVpnService : VpnService() {
                 observationQueue.trySend(observation)
             },
             onRelayResult = ::noteRelayResult,
+            udpRelay = udp,
+            tcpRelay = tcp,
         )
+        packetSink = interceptor
         interceptionJob = interceptor.start(scope)
+
+        if (udp != null || tcp != null) {
+            // Flows that go quiet are closed periodically so sockets are not held open
+            // for the life of the tunnel.
+            sweepJob = scope.launch {
+                while (isActive) {
+                    delay(RELAY_SWEEP_INTERVAL_MILLIS)
+                    udp?.sweep()
+                    tcp?.sweep()
+                }
+            }
+        }
 
         publishDiagnostics()
         VpnStatus.update(VpnState.Active(System.currentTimeMillis()))
@@ -275,6 +330,13 @@ class ChanakyaVpnService : VpnService() {
 
         serviceScope?.cancel()
         serviceScope = null
+
+        sweepJob?.cancel()
+        sweepJob = null
+        udpRelay?.close()
+        tcpRelay?.close()
+        udpRelay = null
+        tcpRelay = null
 
         try {
             tunInterface?.close()
@@ -366,24 +428,34 @@ class ChanakyaVpnService : VpnService() {
             .addAddress(VPN_ADDRESS, VPN_PREFIX_LENGTH)
             .addAddress(VPN_V6_ADDRESS, VPN_V6_PREFIX_LENGTH)
 
-        // Advertise our own resolvers and route them. Advertising is what makes capture
-        // work at all: the platform binds DNS to the network it resolves on, so a tunnel
-        // that merely routes the real resolvers is bypassed and observes nothing - which
-        // is exactly why the app reported zero blocked.
-        builder.addDnsServer(VPN_DNS_ADDRESS)
-        builder.addRoute(VPN_DNS_ADDRESS, 32)
-        builder.addDnsServer(VPN_DNS_V6_ADDRESS)
-        builder.addRoute(VPN_DNS_V6_ADDRESS, VPN_V6_PREFIX_LENGTH)
-        routedDnsServers = 2
+        if (tunnelFullTunnel) {
+            // Route everything. This is what makes Android's Private DNS safe: its
+            // DNS-over-TLS probe is carried by the relay like any other connection, so
+            // the platform keeps a resolver it can use. Nothing is advertised, because
+            // every lookup already passes through us.
+            builder.addRoute("0.0.0.0", 0)
+            builder.addRoute("::", 0)
+            routedDnsServers = 0
+        } else {
+            // Advertise our own resolvers and route them. Advertising is what makes
+            // capture work at all: the platform binds DNS to the network it resolves on,
+            // so a tunnel that merely routes the real resolvers is bypassed and observes
+            // nothing - which is exactly why the app reported zero blocked.
+            builder.addDnsServer(VPN_DNS_ADDRESS)
+            builder.addRoute(VPN_DNS_ADDRESS, 32)
+            builder.addDnsServer(VPN_DNS_V6_ADDRESS)
+            builder.addRoute(VPN_DNS_V6_ADDRESS, VPN_V6_PREFIX_LENGTH)
+            routedDnsServers = 2
 
-        // Also route the device's real resolvers, so an app that hardcodes one is still
-        // captured.
-        upstreamServers.forEach { address ->
-            val host = address.hostAddress?.substringBefore('%') ?: return@forEach
-            val prefix = if (address is Inet4Address) 32 else 128
-            if (host == VPN_DNS_ADDRESS) return@forEach
-            builder.addRoute(host, prefix)
-            routedDnsServers += 1
+            // Also route the device's real resolvers, so an app that hardcodes one is
+            // still captured.
+            upstreamServers.forEach { address ->
+                val host = address.hostAddress?.substringBefore('%') ?: return@forEach
+                val prefix = if (address is Inet4Address) 32 else 128
+                if (host == VPN_DNS_ADDRESS) return@forEach
+                builder.addRoute(host, prefix)
+                routedDnsServers += 1
+            }
         }
 
         if (tunnelBlockIpLevel) {
@@ -512,6 +584,9 @@ class ChanakyaVpnService : VpnService() {
 
         /** Allowed lookups to attempt before concluding that relaying is broken. */
         private const val RELAY_FAILURE_THRESHOLD = 10
+
+        /** How often idle relay flows are swept, in milliseconds. */
+        private const val RELAY_SWEEP_INTERVAL_MILLIS = 30_000L
 
         /** Surfaced when protection switched itself off because relaying was failing. */
         private const val RELAY_FAILURE_MESSAGE =

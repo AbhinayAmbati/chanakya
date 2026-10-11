@@ -122,4 +122,17 @@
     <string name="ad_id_channel_name">Advertising ID</string>
     <string name="ad_id_reminder_title">Time to reset your advertising ID</string>
     <string name="ad_id_reminder_body">Open Chanakya and tap \'Open ad settings\' to reset or delete your advertising ID.</string>
+    <string name="action_back">Back</string>
+    <string name="about_title">About</string>
+    <string name="about_subtitle">What Chanakya is, and how it protects you.</string>
+    <string name="terms_title">Terms of use</string>
+    <string name="terms_subtitle">The terms that apply to using Chanakya.</string>
+    <string name="privacy_title">Privacy</string>
+    <string name="privacy_subtitle">Exactly what the app does with your data.</string>
+    <string name="legal_footer">Chanakya is open source. This text ships with the app, and its history is public.</string>
+    <string name="settings_about_open">Open</string>
+    <string name="settings_terms">Terms of use</string>
+    <string name="settings_privacy">Privacy policy</string>
+    <string name="settings_full_tunnel">Full tunnel</string>
+    <string name="settings_full_tunnel_desc">Route every packet through Chanakya, not just DNS. This is what lets Private DNS stay switched on: the platform's encrypted-DNS probe is carried like any other connection instead of being refused. Leave it off unless you use Private DNS, because with it on the app carries all of your traffic.</string>
 </resources>
