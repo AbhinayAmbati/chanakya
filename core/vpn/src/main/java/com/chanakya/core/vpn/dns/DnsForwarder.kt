@@ -56,7 +56,7 @@ class DnsForwarder(
 
     private companion object {
         const val DNS_PORT = 53
-        const val SOCKET_TIMEOUT_MILLIS = 5_000
+        const val SOCKET_TIMEOUT_MILLIS = 3_000
         const val MAX_RESPONSE_SIZE = 4096
     }
 }

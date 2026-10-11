@@ -117,8 +117,11 @@ class TunInterceptor(
             // Answer locally: the query never reaches the network.
             DnsMessage.buildBlockedResponse(datagram.payload, question)
         } else {
-            // Forward upstream and relay the genuine answer.
-            forwarder.forward(datagram.payload) ?: return
+            // Forward upstream and relay the genuine answer. If relaying fails we still
+            // answer - with SERVFAIL - rather than dropping the packet, so the app is
+            // never left hanging with no reply at all.
+            forwarder.forward(datagram.payload)
+                ?: DnsMessage.buildServFailResponse(datagram.payload, question)
         }
 
         output.write(IpPacketCodec.buildReply(datagram, responsePayload))

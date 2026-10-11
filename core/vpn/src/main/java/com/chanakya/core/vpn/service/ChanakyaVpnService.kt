@@ -3,6 +3,7 @@ package com.chanakya.core.vpn.service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
@@ -33,7 +34,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import java.net.Inet4Address
 import java.net.InetAddress
 
 /**
@@ -41,11 +41,10 @@ import java.net.InetAddress
  * blocks queries to known trackers and records what it saw. No traffic is ever
  * forwarded to an external server.
  *
- * How DNS is captured - deliberately two ways, so neither can silently fail:
- *  1. The tunnel advertises **its own resolver** ([VPN_DNS_ADDRESS]) and routes it, so
- *     the system sends DNS to us by construction.
- *  2. The device's **real resolvers are routed in as well**, so an app that hardcodes
- *     one is still captured.
+ * How DNS is captured: the tunnel advertises **its own resolvers** - IPv4 and IPv6 - and
+ * routes exactly those, so the system sends DNS to us by construction. Nothing else is
+ * routed, which is what keeps the device's own connectivity intact; see
+ * [establishTunnel] for why the real resolvers are deliberately left alone.
  *
  * The upstream resolvers used to relay allowed queries are read from a **non-VPN**
  * network. That matters: once our own tunnel is up it becomes the active network, and
@@ -85,6 +84,10 @@ class ChanakyaVpnService : VpnService() {
     private var sessionObservations = 0
     private var sessionBlocked = 0
     private var routedDnsServers = 0
+
+    /** The real network the tunnel rides on; handed to the builder as the underlying network. */
+    @Volatile
+    private var underlyingNetwork: Network? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -127,6 +130,7 @@ class ChanakyaVpnService : VpnService() {
 
         startForeground(VpnNotification.NOTIFICATION_ID, notification.build(sessionBlocked))
 
+        underlyingNetwork = currentUnderlyingNetwork()
         val upstreamServers = currentUpstreamResolvers()
         tunnelBlockIpLevel = blockIpLevelEnabled
         val descriptor = establishTunnel(upstreamServers)
@@ -292,23 +296,31 @@ class ChanakyaVpnService : VpnService() {
             .setSession(SESSION_NAME)
             .setMtu(MTU)
             .addAddress(VPN_ADDRESS, VPN_PREFIX_LENGTH)
+            .addAddress(VPN_V6_ADDRESS, VPN_V6_PREFIX_LENGTH)
 
-        // 1. Advertise our own resolver and route it, so system DNS comes to us.
+        // Advertise our own resolvers - IPv4 and IPv6 - and route them, so the system
+        // sends DNS to us by construction.
+        //
+        // Deliberately the *only* addresses routed. The device's real resolvers are NOT
+        // routed in: doing so made relaying depend on protect() succeeding, because a
+        // query to a routed resolver would be captured by our own tunnel again. When
+        // protect() did not take effect that became a loop - every lookup hung and the
+        // whole connection went dead. Leaving them unrouted means a relay that is not
+        // protected simply leaves the device over the real network, as it should.
         builder.addDnsServer(VPN_DNS_ADDRESS)
         builder.addRoute(VPN_DNS_ADDRESS, 32)
-        routedDnsServers = 1
-
-        // 2. Also route the device's real resolvers, catching apps that hardcode one.
-        upstreamServers.forEach { address ->
-            val host = address.hostAddress?.substringBefore('%') ?: return@forEach
-            val prefix = if (address is Inet4Address) 32 else 128
-            if (host == VPN_DNS_ADDRESS) return@forEach
-            builder.addRoute(host, prefix)
-            routedDnsServers += 1
-        }
+        builder.addDnsServer(VPN_DNS_V6_ADDRESS)
+        builder.addRoute(VPN_DNS_V6_ADDRESS, VPN_V6_PREFIX_LENGTH)
+        routedDnsServers = 2
 
         if (tunnelBlockIpLevel) {
             addIpBlockRoutes(builder, upstreamServers)
+        }
+
+        // Tell the system which network the tunnel rides on. Without this the platform
+        // cannot validate connectivity through the tunnel and reports "no internet".
+        underlyingNetwork?.let { network ->
+            builder.setUnderlyingNetworks(arrayOf(network))
         }
 
         try {
@@ -354,10 +366,12 @@ class ChanakyaVpnService : VpnService() {
     private fun currentUpstreamResolvers(): List<InetAddress> {
         val connectivityManager = getSystemService(ConnectivityManager::class.java)
             ?: return emptyList()
+        val underlying = underlyingNetwork
         val active = connectivityManager.activeNetwork
         val ordered = buildList {
-            active?.let { add(it) }
-            connectivityManager.allNetworks.forEach { if (it != active) add(it) }
+            underlying?.let { add(it) }
+            active?.let { if (it != underlying) add(it) }
+            connectivityManager.allNetworks.forEach { if (it != active && it != underlying) add(it) }
         }
 
         for (network in ordered) {
@@ -368,6 +382,28 @@ class ChanakyaVpnService : VpnService() {
             if (servers.isNotEmpty()) return servers
         }
         return emptyList()
+    }
+
+    /**
+     * The real (non-VPN) network the tunnel rides on.
+     *
+     * Read before the tunnel is built and stored, so the builder can declare it as the
+     * underlying network and the resolver lookup can prefer it.
+     */
+    private fun currentUnderlyingNetwork(): Network? {
+        val connectivityManager = getSystemService(ConnectivityManager::class.java)
+            ?: return null
+        val active = connectivityManager.activeNetwork
+        val ordered = buildList {
+            active?.let { add(it) }
+            connectivityManager.allNetworks.forEach { if (it != active) add(it) }
+        }
+        return ordered.firstOrNull { network ->
+            val capabilities = connectivityManager.getNetworkCapabilities(network)
+                ?: return@firstOrNull false
+            !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
     }
 
     /** Read and parse the bundled IP ranges. */
@@ -388,6 +424,13 @@ class ChanakyaVpnService : VpnService() {
         private const val VPN_ADDRESS = "10.111.222.2"
         private const val VPN_PREFIX_LENGTH = 32
         private const val VPN_DNS_ADDRESS = "10.111.222.3"
+
+        // An IPv6 address inside the tunnel is required for IPv6 DNS to be answerable:
+        // without one, a query arriving over IPv6 has no address to reply from and is
+        // silently discarded, which on an IPv6-heavy carrier looks like a dead network.
+        private const val VPN_V6_ADDRESS = "fd00:1:fd00:1:fd00:1:fd00:1"
+        private const val VPN_DNS_V6_ADDRESS = "fd00:1:fd00:1:fd00:1:fd00:2"
+        private const val VPN_V6_PREFIX_LENGTH = 128
         private const val UNKNOWN_PACKAGE = "unknown"
         private const val IP_BLOCKLIST_ASSET = "blocklists/ip_ranges.txt"
 

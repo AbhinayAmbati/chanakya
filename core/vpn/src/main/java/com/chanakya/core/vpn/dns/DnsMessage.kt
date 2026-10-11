@@ -100,4 +100,27 @@ object DnsMessage {
 
         return header + questionBytes + answer
     }
+
+    /**
+     * Build a SERVFAIL response (RCODE 2) echoing the question.
+     *
+     * Used when an allowed query cannot be relayed. Answering with an error lets the
+     * caller fail fast and retry; dropping the packet instead leaves it waiting for its
+     * own timeout, which reaches the user as "the internet is broken".
+     */
+    fun buildServFailResponse(query: ByteArray, question: Question): ByteArray {
+        val header = query.copyOfRange(0, HEADER_LENGTH)
+        val questionBytes = query.copyOfRange(HEADER_LENGTH, question.questionEnd)
+
+        // Response flags: standard response, recursion available, SERVFAIL.
+        val flags = 0x8182
+        header[2] = (flags shr 8).toByte()
+        header[3] = flags.toByte()
+        header[4] = 0; header[5] = 1 // QDCOUNT = 1
+        header[6] = 0; header[7] = 0 // ANCOUNT
+        header[8] = 0; header[9] = 0 // NSCOUNT
+        header[10] = 0; header[11] = 0 // ARCOUNT
+
+        return header + questionBytes
+    }
 }
