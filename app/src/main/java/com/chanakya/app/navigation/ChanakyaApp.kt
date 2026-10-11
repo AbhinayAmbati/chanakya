@@ -125,6 +125,7 @@ private fun ChanakyaBottomBar(
                     destination = destination,
                     selected = selected,
                     onClick = { onSelect(destination.route) },
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -137,6 +138,7 @@ private fun BottomBarItem(
     destination: TopLevelDestination,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tint = if (selected) {
         MaterialTheme.colorScheme.primary
@@ -145,8 +147,7 @@ private fun BottomBarItem(
     }
 
     Column(
-        modifier = Modifier
-            .weight(1f)
+        modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
