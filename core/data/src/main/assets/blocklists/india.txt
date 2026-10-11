@@ -1,0 +1,29 @@
+# Chanakya - India SDKs
+# Trackers and SDKs common in Indian apps, which global lists under-cover.
+0.0.0.0 clevertap.com
+0.0.0.0 api.clevertap.com
+0.0.0.0 wizrocket.com
+0.0.0.0 moengage.com
+0.0.0.0 api.moengage.com
+0.0.0.0 webengage.com
+0.0.0.0 sdk.webengage.com
+0.0.0.0 truecaller.com
+0.0.0.0 sdk.truecaller.com
+0.0.0.0 inmobi.com
+0.0.0.0 inmo.bsclink.com
+0.0.0.0 adgebra.co.in
+0.0.0.0 ads.yaar.com
+0.0.0.0 mxsads.com
+0.0.0.0 sendbird.com
+0.0.0.0 mparticle.com
+0.0.0.0 kochava.com
+0.0.0.0 tenor.com
+0.0.0.0 sharechat.com
+0.0.0.0 analytics.sharechat.com
+0.0.0.0 dailyhunt.in
+0.0.0.0 analytics.dailyhunt.in
+0.0.0.0 zapr.in
+0.0.0.0 vmax.com
+0.0.0.0 ads.vmax.com
+0.0.0.0 netcorecloud.com
+0.0.0.0 analytics.netcorecloud.com

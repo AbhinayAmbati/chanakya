@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Process
 import android.system.OsConstants
 import com.chanakya.core.data.model.AppInfo
+import com.chanakya.core.vpn.model.ResolvedApp
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
@@ -59,6 +60,20 @@ class AppResolver(private val context: Context) {
             }
         }
         return ProcNetUidResolver.resolve(sourcePort)
+    }
+
+    /**
+     * Resolve both the uid and the owning app for an in-flight query.
+     *
+     * @return the resolved app, or null if the uid could not be determined.
+     */
+    fun resolveApp(
+        sourcePort: Int,
+        sourceAddress: InetAddress,
+        destinationAddress: InetAddress,
+    ): ResolvedApp? {
+        val uid = resolveUid(sourcePort, sourceAddress, destinationAddress) ?: return null
+        return ResolvedApp(uid = uid, packageName = appInfoForUid(uid)?.packageName)
     }
 
     /**

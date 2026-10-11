@@ -6,7 +6,10 @@ import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import com.chanakya.core.data.db.DatabaseProvider
+import com.chanakya.core.data.prefs.SettingsRepository
+import com.chanakya.core.data.repository.BlocklistRepository
 import com.chanakya.core.data.repository.EventRecorder
+import com.chanakya.core.data.repository.UserRuleRepository
 import com.chanakya.core.vpn.attribution.AppResolver
 import com.chanakya.core.vpn.dns.DnsForwarder
 import com.chanakya.core.vpn.dns.DnsInterceptor
@@ -15,12 +18,16 @@ import com.chanakya.core.vpn.model.VpnState
 import com.chanakya.core.vpn.model.VpnStatus
 import com.chanakya.core.vpn.rules.BlocklistStore
 import com.chanakya.core.vpn.rules.RuleEngine
+import com.chanakya.core.vpn.rules.RuleEngineHolder
+import com.chanakya.core.vpn.rules.UserRuleSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -37,6 +44,8 @@ import java.net.InetAddress
  *  - Blocked queries are answered locally with `0.0.0.0`.
  *  - Observations are handed to a channel and written to the database by a separate
  *    coroutine, so the packet loop never blocks on I/O.
+ *  - The active rules are rebuilt whenever a blocklist is toggled or a user rule
+ *    changes, and swapped in atomically - no VPN restart required.
  *
  * The service is started and stopped through [VpnConnectionManager].
  */
@@ -47,11 +56,14 @@ class ChanakyaVpnService : VpnService() {
     private var interceptionJob: Job? = null
     private var recordingJob: Job? = null
 
-    private val ruleEngine = RuleEngine(BlocklistStore.STARTER)
+    private val ruleEngineHolder = RuleEngineHolder(RuleEngine(BlocklistStore.STARTER))
     private val notification by lazy { VpnNotification(this) }
 
     private lateinit var appResolver: AppResolver
     private lateinit var eventRecorder: EventRecorder
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var blocklistRepository: BlocklistRepository
+    private lateinit var userRuleRepository: UserRuleRepository
 
     /** How many trackers this session has blocked, for the notification. */
     private var sessionBlockedCount = 0
@@ -61,6 +73,9 @@ class ChanakyaVpnService : VpnService() {
         val database = DatabaseProvider.get(this)
         eventRecorder = EventRecorder(database.blockedEventDao(), database.appMetaDao())
         appResolver = AppResolver(this)
+        settingsRepository = SettingsRepository(this)
+        blocklistRepository = BlocklistRepository(this, settingsRepository, database.customBlocklistDao())
+        userRuleRepository = UserRuleRepository(database.userRuleDao())
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -91,6 +106,10 @@ class ChanakyaVpnService : VpnService() {
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         serviceScope = scope
 
+        // Populate the default blocklists on first run, then keep the rules live.
+        scope.launch { blocklistRepository.ensureInitialised() }
+        scope.launch { observeRules() }
+
         // Observations are queued here and drained by the recording coroutine.
         val observationQueue = Channel<DnsObservation>(Channel.UNLIMITED)
         recordingJob = scope.launch { consumeObservations(observationQueue) }
@@ -101,10 +120,10 @@ class ChanakyaVpnService : VpnService() {
         val forwarder = DnsForwarder(upstreamServers) { socket -> protect(socket) }
         val interceptor = DnsInterceptor(
             descriptor = descriptor,
-            ruleEngine = ruleEngine,
+            ruleEngineHolder = ruleEngineHolder,
             forwarder = forwarder,
-            resolveUid = { port, source, destination ->
-                appResolver.resolveUid(port, source, destination)
+            resolveApp = { port, source, destination ->
+                appResolver.resolveApp(port, source, destination)
             },
             onObservation = { observation ->
                 if (observation.blocked) sessionBlockedCount += 1
@@ -114,6 +133,26 @@ class ChanakyaVpnService : VpnService() {
         interceptionJob = interceptor.start(scope)
 
         VpnStatus.update(VpnState.Active(System.currentTimeMillis()))
+    }
+
+    /**
+     * Rebuild the rule engine whenever the enabled blocklists or the user rules change.
+     */
+    private suspend fun observeRules() {
+        combine(
+            blocklistRepository.observeEnabledIds(),
+            userRuleRepository.observeRules(),
+        ) { enabledIds, rules -> enabledIds to rules }
+            .collect { (enabledIds, rules) ->
+                try {
+                    val domains = blocklistRepository.loadDomains(enabledIds)
+                    ruleEngineHolder.update(
+                        RuleEngine(BlocklistStore(domains), UserRuleSet(rules)),
+                    )
+                } catch (exception: Exception) {
+                    // Keep the previous engine if a rebuild fails.
+                }
+            }
     }
 
     /** Persist the installed app list so events can be labelled. */
@@ -129,10 +168,9 @@ class ChanakyaVpnService : VpnService() {
     private suspend fun consumeObservations(queue: Channel<DnsObservation>) {
         for (observation in queue) {
             try {
-                val app = appResolver.appInfoForUid(observation.uid)
                 eventRecorder.record(
                     domain = observation.domain,
-                    packageName = app?.packageName ?: UNKNOWN_PACKAGE,
+                    packageName = observation.packageName ?: UNKNOWN_PACKAGE,
                     uid = observation.uid,
                     blocked = observation.blocked,
                     timestamp = observation.timestamp,

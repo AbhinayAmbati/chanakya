@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /** The single DataStore instance for user preferences. */
@@ -24,6 +25,7 @@ class SettingsRepository(private val context: Context) {
         val AUTO_START_ON_BOOT = booleanPreferencesKey("auto_start_on_boot")
         val BLOCK_IP_LEVEL = booleanPreferencesKey("block_ip_level")
         val ENABLED_BLOCKLISTS = stringSetPreferencesKey("enabled_blocklists")
+        val BLOCKLISTS_INITIALISED = booleanPreferencesKey("blocklists_initialised")
     }
 
     /** Whether the local VPN should be running. */
@@ -60,5 +62,23 @@ class SettingsRepository(private val context: Context) {
     /** Replace the set of enabled blocklists. */
     suspend fun setEnabledBlocklists(ids: Set<String>) {
         context.settingsDataStore.edit { it[Keys.ENABLED_BLOCKLISTS] = ids }
+    }
+
+    /** Read the enabled blocklists once. */
+    suspend fun currentEnabledBlocklists(): Set<String> = enabledBlocklists.first()
+
+    /**
+     * Populate the enabled blocklists on first run.
+     *
+     * Runs exactly once: a flag records that the defaults have been applied, so a user
+     * who deliberately disables every list does not get them switched back on.
+     */
+    suspend fun ensureBlocklistsInitialised(defaults: Set<String>) {
+        context.settingsDataStore.edit { preferences ->
+            if (preferences[Keys.BLOCKLISTS_INITIALISED] != true) {
+                preferences[Keys.ENABLED_BLOCKLISTS] = defaults
+                preferences[Keys.BLOCKLISTS_INITIALISED] = true
+            }
+        }
     }
 }

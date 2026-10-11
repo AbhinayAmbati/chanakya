@@ -28,6 +28,8 @@ object DatabaseProvider {
                 context.applicationContext,
                 ChanakyaDatabase::class.java,
                 ChanakyaDatabase.NAME,
-            ).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2)
+                .build()
+                .also { instance = it }
         }
 }

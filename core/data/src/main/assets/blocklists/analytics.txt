@@ -1,0 +1,36 @@
+# Chanakya - Analytics SDKs
+# App analytics, attribution and crash-reporting services.
+0.0.0.0 amplitude.com
+0.0.0.0 api.amplitude.com
+0.0.0.0 api.mixpanel.com
+0.0.0.0 appboy.com
+0.0.0.0 appsflyer.com
+0.0.0.0 braze.com
+0.0.0.0 bugsnag.com
+0.0.0.0 chartbeat.com
+0.0.0.0 clevertap.com
+0.0.0.0 comscore.com
+0.0.0.0 count.ly
+0.0.0.0 crashlytics.com
+0.0.0.0 demonware.net
+0.0.0.0 flurry.com
+0.0.0.0 google-analytics.com
+0.0.0.0 heap.io
+0.0.0.0 instabug.com
+0.0.0.0 keen.io
+0.0.0.0 kochava.com
+0.0.0.0 localytics.com
+0.0.0.0 matomo.cloud
+0.0.0.0 mixpanel.com
+0.0.0.0 moengage.com
+0.0.0.0 mparticle.com
+0.0.0.0 newrelic.com
+0.0.0.0 segment.com
+0.0.0.0 segment.io
+0.0.0.0 sentry.io
+0.0.0.0 smartlook.com
+0.0.0.0 snowplowanalytics.com
+0.0.0.0 statcounter.com
+0.0.0.0 umeng.com
+0.0.0.0 webengage.com
+0.0.0.0 yandex-metrica.com

@@ -2,8 +2,9 @@ package com.chanakya.core.vpn.dns
 
 import android.os.ParcelFileDescriptor
 import com.chanakya.core.vpn.model.DnsObservation
+import com.chanakya.core.vpn.model.ResolvedApp
 import com.chanakya.core.vpn.rules.RuleDecision
-import com.chanakya.core.vpn.rules.RuleEngine
+import com.chanakya.core.vpn.rules.RuleEngineHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -14,25 +15,25 @@ import java.io.IOException
 import java.net.InetAddress
 
 /**
- * Reads DNS queries off the TUN interface, applies the [RuleEngine] and writes a
+ * Reads DNS queries off the TUN interface, applies the current rules and writes a
  * response back.
  *
  * The read loop is the hot path of the whole application, so it holds no locks and
- * does no database work: it resolves the owning app synchronously (the socket is only
- * identifiable while the query is in flight), emits a [DnsObservation] and moves on.
- * Persistence happens on a separate coroutine.
+ * does no database work: it attributes the query to an app synchronously (the socket
+ * is only identifiable while the query is in flight), emits a [DnsObservation] and
+ * moves on. Persistence happens on a separate coroutine.
  *
  * @param descriptor the TUN interface file descriptor from `VpnService.Builder.establish`.
- * @param ruleEngine the engine used to allow or block each query.
+ * @param ruleEngineHolder the live rules; read on every query so changes apply instantly.
  * @param forwarder forwards allowed queries to the real resolver.
- * @param resolveUid resolves the owning app's uid for an in-flight query.
+ * @param resolveApp attributes an in-flight query to the app that made it.
  * @param onObservation invoked for every query, allowed or blocked.
  */
 class DnsInterceptor(
     descriptor: ParcelFileDescriptor,
-    private val ruleEngine: RuleEngine,
+    private val ruleEngineHolder: RuleEngineHolder,
     private val forwarder: DnsForwarder,
-    private val resolveUid: (sourcePort: Int, sourceAddress: InetAddress, destinationAddress: InetAddress) -> Int?,
+    private val resolveApp: (sourcePort: Int, sourceAddress: InetAddress, destinationAddress: InetAddress) -> ResolvedApp?,
     private val onObservation: (DnsObservation) -> Unit,
 ) {
 
@@ -67,20 +68,27 @@ class DnsInterceptor(
         if (datagram.destinationPort != DNS_PORT) return
 
         val question = DnsMessage.parseQuestion(datagram.payload) ?: return
-        val blocked = ruleEngine.decide(question.name) == RuleDecision.BLOCK
 
         // Attribute the query to an app while its socket still exists.
-        val uid = resolveUid(
+        val resolved = resolveApp(
             datagram.sourcePort,
             InetAddress.getByAddress(datagram.sourceAddress),
             InetAddress.getByAddress(datagram.destinationAddress),
-        ) ?: UNKNOWN_UID
+        )
+        val uid = resolved?.uid ?: UNKNOWN_UID
+        val packageName = resolved?.packageName
+
+        val blocked = ruleEngineHolder.decide(
+            question.name,
+            packageName ?: UNKNOWN_PACKAGE,
+        ) == RuleDecision.BLOCK
 
         onObservation(
             DnsObservation(
                 domain = question.name,
                 blocked = blocked,
                 uid = uid,
+                packageName = packageName,
                 sourcePort = datagram.sourcePort,
                 timestamp = System.currentTimeMillis(),
             ),
@@ -101,5 +109,6 @@ class DnsInterceptor(
         const val DNS_PORT = 53
         const val MAX_PACKET_SIZE = 32_767
         const val UNKNOWN_UID = -1
+        const val UNKNOWN_PACKAGE = "unknown"
     }
 }
