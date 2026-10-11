@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-11
+
+### Fixed
+
+- DNS interception could capture nothing after the tunnel was rebuilt, because the
+  upstream resolver lookup read the active network - which is Chanakya's own tunnel -
+  and found no resolvers. Resolvers are now read from a non-VPN network, and the tunnel
+  routes both its own resolver and the device's real ones so capture no longer depends
+  on that lookup succeeding.
+- Allowed queries now fall back to public resolvers when the device exposes none, so
+  resolution cannot hang.
+- Release builds could fail to start background workers because R8 had no keep rule for
+  them.
+
+### Added
+
+- Diagnostics section in Settings: protection state, loaded domains and IP ranges,
+  routed resolvers, and per-session query and block counters.
+- Appearance setting with System, Light and Dark options.
+
+### Changed
+
+- The bottom navigation bar now floats, inset from the screen edges.
+- Release APKs are published as `chanakya.apk`.
+
 ## [1.0.0] - 2026-10-11
 
 ### Added
@@ -57,4 +82,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from real device activity.
 
 [Unreleased]: https://github.com/AbhinayAmbati/chanakya/commits/main
+[1.0.1]: https://github.com/AbhinayAmbati/chanakya/releases/tag/v1.0.1
 [1.0.0]: https://github.com/AbhinayAmbati/chanakya/releases/tag/v1.0.0
