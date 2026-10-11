@@ -7,6 +7,7 @@ import com.chanakya.app.di.AppContainer
 import com.chanakya.app.ui.appdetail.AppDetailViewModel
 import com.chanakya.app.ui.apps.AppsViewModel
 import com.chanakya.app.ui.home.HomeViewModel
+import com.chanakya.app.ui.reports.ReportsViewModel
 import com.chanakya.app.ui.settings.SettingsViewModel
 
 /**
@@ -40,6 +41,11 @@ object AppViewModelProvider {
                 packageName = packageName,
             )
         }
+    }
+
+    /** Factory for [ReportsViewModel]. */
+    fun reports(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
+        initializer { ReportsViewModel(container.reportsRepository) }
     }
 
     /** Factory for [SettingsViewModel]. */

@@ -3,6 +3,8 @@ package com.chanakya.core.data.db.dao
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import com.chanakya.core.data.db.AppCountRow
+import com.chanakya.core.data.db.NetworkCountRow
 import com.chanakya.core.data.db.entity.BlockedEventEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -36,6 +38,26 @@ interface BlockedEventDao {
     /** Total blocked count since the given time. */
     @Query("SELECT COUNT(*) FROM blocked_events WHERE blocked = 1 AND timestamp >= :since")
     fun observeBlockedSince(since: Long): Flow<Int>
+
+    /** Number of distinct apps that contacted a tracker since the given time. */
+    @Query("SELECT COUNT(DISTINCT packageName) FROM blocked_events WHERE blocked = 1 AND timestamp >= :since")
+    fun observeAppsSince(since: Long): Flow<Int>
+
+    /** The busiest tracker networks since the given time. */
+    @Query(
+        "SELECT networkId, COUNT(*) AS count FROM blocked_events " +
+            "WHERE blocked = 1 AND timestamp >= :since AND networkId IS NOT NULL " +
+            "GROUP BY networkId ORDER BY count DESC LIMIT :limit",
+    )
+    fun observeTopNetworksSince(since: Long, limit: Int): Flow<List<NetworkCountRow>>
+
+    /** The busiest apps since the given time. */
+    @Query(
+        "SELECT packageName, COUNT(*) AS count FROM blocked_events " +
+            "WHERE blocked = 1 AND timestamp >= :since " +
+            "GROUP BY packageName ORDER BY count DESC LIMIT :limit",
+    )
+    fun observeTopAppsSince(since: Long, limit: Int): Flow<List<AppCountRow>>
 
     /** Total blocked count of all time. */
     @Query("SELECT COUNT(*) FROM blocked_events WHERE blocked = 1")

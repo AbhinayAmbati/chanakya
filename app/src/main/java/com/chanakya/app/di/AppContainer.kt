@@ -8,6 +8,8 @@ import com.chanakya.core.data.db.DatabaseProvider
 import com.chanakya.core.data.prefs.SettingsRepository
 import com.chanakya.core.data.repository.BlocklistRepository
 import com.chanakya.core.data.repository.ReportRepository
+import com.chanakya.core.data.repository.ReportsRepository
+import com.chanakya.core.data.repository.RoomReportsRepository
 import com.chanakya.core.data.repository.RoomTrackerRepository
 import com.chanakya.core.data.repository.TrackerRepository
 import com.chanakya.core.data.repository.UserRuleRepository
@@ -48,6 +50,11 @@ class AppContainer(private val context: Context) {
     /** One-shot aggregates used by the report workers. */
     val reportRepository: ReportRepository by lazy {
         ReportRepository(database.blockedEventDao())
+    }
+
+    /** Aggregated windows for the Reports screen. */
+    val reportsRepository: ReportsRepository by lazy {
+        RoomReportsRepository(database.blockedEventDao(), database.appMetaDao())
     }
 
     /** Schedules the app's periodic background work. */

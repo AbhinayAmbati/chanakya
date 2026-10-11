@@ -26,5 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   toggled independently, plus import of custom hosts/domain lists.
 - Background reports: a daily protection summary notification and an optional monthly
   advertising-ID reminder.
+- Reports screen: live today / last-7-days / all-time aggregates with the busiest
+  networks and apps.
+- App detail: domains governed by a user rule are now marked, and app icons replace the
+  letter avatars across the app.
 
 [Unreleased]: https://github.com/AbhinayAmbati/chanakya/commits/main

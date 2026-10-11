@@ -37,12 +37,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chanakya.app.R
 import com.chanakya.app.di.LocalAppContainer
 import com.chanakya.app.ui.AppViewModelProvider
+import com.chanakya.app.ui.common.AppIcon
 import com.chanakya.app.ui.common.TimeFormat
 import com.chanakya.app.ui.common.accentColor
 import com.chanakya.core.data.model.BlockedEvent
+import com.chanakya.core.data.model.RuleType
 import com.chanakya.core.designsystem.component.CategoryChip
 import com.chanakya.core.designsystem.component.ChanakyaCard
-import com.chanakya.core.designsystem.component.ChanakyaScreenTitle
 import com.chanakya.core.designsystem.component.SectionHeader
 import com.chanakya.core.designsystem.component.StatRow
 import com.chanakya.core.designsystem.component.StatTile
@@ -52,8 +53,8 @@ import com.chanakya.core.designsystem.theme.StatusDetected
 
 /**
  * The per-app detail screen: how much this app tracked, which networks it contacted,
- * and the individual domains it resolved. Each domain can be acted on directly to
- * create an allow/block rule.
+ * and the individual domains it resolved. Domains already governed by a user rule are
+ * marked, and each can be acted on to create a new rule.
  *
  * @param packageName the app to display.
  * @param onBack returns to the previous screen.
@@ -67,7 +68,8 @@ fun AppDetailScreen(
     val container = LocalAppContainer.current
     val viewModel: AppDetailViewModel =
         viewModel(factory = AppViewModelProvider.appDetail(container, packageName))
-    val detail by viewModel.detail.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val detail = state.detail
 
     LazyColumn(
         modifier = modifier
@@ -87,10 +89,26 @@ fun AppDetailScreen(
         }
 
         item {
-            ChanakyaScreenTitle(
-                title = detail?.app?.label ?: packageName,
-                subtitle = packageName,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppIcon(
+                    packageName = packageName,
+                    label = detail?.app?.label ?: packageName,
+                    size = 56.dp,
+                )
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text(
+                        text = detail?.app?.label ?: packageName,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Text(
+                        text = packageName,
+                        style = MonoTextStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         item {
@@ -116,9 +134,7 @@ fun AppDetailScreen(
 
         val networks = detail?.networks.orEmpty()
         if (networks.isNotEmpty()) {
-            item {
-                SectionHeader(title = stringResource(R.string.app_detail_networks))
-            }
+            item { SectionHeader(title = stringResource(R.string.app_detail_networks)) }
             items(networks, key = { it.network.id }) { networkCount ->
                 ChanakyaCard {
                     Row(
@@ -147,9 +163,7 @@ fun AppDetailScreen(
             }
         }
 
-        item {
-            SectionHeader(title = stringResource(R.string.app_detail_domains))
-        }
+        item { SectionHeader(title = stringResource(R.string.app_detail_domains)) }
 
         val events = detail?.events.orEmpty()
         if (events.isEmpty()) {
@@ -164,6 +178,7 @@ fun AppDetailScreen(
             items(events, key = { it.id }) { event ->
                 DomainRow(
                     event = event,
+                    ruleType = state.ruleByDomain[event.domain],
                     onBlockEverywhere = { viewModel.blockEverywhere(event.domain) },
                     onAllowEverywhere = { viewModel.allowEverywhere(event.domain) },
                     onBlockForApp = { viewModel.blockForApp(event.domain) },
@@ -177,11 +192,13 @@ fun AppDetailScreen(
 }
 
 /**
- * A single resolved domain with an overflow menu that creates an allow/block rule.
+ * A single resolved domain. When a user rule governs it, the rule is shown so the user
+ * can see why it is allowed or blocked.
  */
 @Composable
 private fun DomainRow(
     event: BlockedEvent,
+    ruleType: RuleType?,
     onBlockEverywhere: () -> Unit,
     onAllowEverywhere: () -> Unit,
     onBlockForApp: () -> Unit,
@@ -194,20 +211,42 @@ private fun DomainRow(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = event.domain,
-                style = MonoTextStyle,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = TimeFormat.relative(event.timestamp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = event.domain,
+                    style = MonoTextStyle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = TimeFormat.relative(event.timestamp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (ruleType != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                if (ruleType == RuleType.ALLOW) {
+                                    R.string.rule_applied_allow
+                                } else {
+                                    R.string.rule_applied_block
+                                },
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (ruleType == RuleType.ALLOW) {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                StatusBlocked
+                            },
+                        )
+                    }
+                }
+            }
+
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
