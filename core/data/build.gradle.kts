@@ -33,8 +33,9 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Room - local persistence for events, aggregates and app metadata.
-    implementation(libs.androidx.room.runtime)
+    // Room is part of this module's public API surface (ChanakyaDatabase extends
+    // RoomDatabase), so it is exposed with `api` rather than `implementation`.
+    api(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 

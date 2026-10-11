@@ -78,6 +78,9 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:vpn"))
 
+    // Room is needed directly here because AppContainer builds the database.
+    implementation(libs.androidx.room.runtime)
+
     // ---- AndroidX core ----------------------------------------------------
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
