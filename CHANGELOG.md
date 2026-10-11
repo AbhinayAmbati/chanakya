@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-11
+
 ### Added
 
 - Project scaffolding: multi-module Gradle build, version catalog, CI/CD workflows.
@@ -55,3 +57,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from real device activity.
 
 [Unreleased]: https://github.com/AbhinayAmbati/chanakya/commits/main
+[1.0.0]: https://github.com/AbhinayAmbati/chanakya/releases/tag/v1.0.0
