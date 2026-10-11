@@ -30,17 +30,22 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Loads and caches app launcher icons.
  *
- * Icons are read once per package and kept in memory. A failed lookup is cached as null
- * (the presence of the key is what marks it cached) so a missing icon is not retried on
- * every recomposition.
+ * Icons are read once per package and kept in memory. A failed lookup is remembered in
+ * [missing] rather than as a null value, so a missing icon is not retried on every
+ * recomposition. Storing null was the bug: `ConcurrentHashMap` rejects null values and
+ * threw the moment an icon could not be read, crashing the list while it scrolled.
  */
 object AppIcons {
 
-    private val cache = ConcurrentHashMap<String, ImageBitmap?>()
+    private val cache = ConcurrentHashMap<String, ImageBitmap>()
+
+    /** Packages whose icon could not be read, kept so they are not retried. */
+    private val missing = ConcurrentHashMap.newKeySet<String>()
 
     /** Load the launcher icon for [packageName], or null if it cannot be read. */
     suspend fun load(context: Context, packageName: String): ImageBitmap? {
-        if (cache.containsKey(packageName)) return cache[packageName]
+        cache[packageName]?.let { return it }
+        if (packageName in missing) return null
 
         val icon = withContext(Dispatchers.IO) {
             try {
@@ -50,7 +55,8 @@ object AppIcons {
                 null
             }
         }
-        cache[packageName] = icon
+
+        if (icon != null) cache[packageName] = icon else missing.add(packageName)
         return icon
     }
 

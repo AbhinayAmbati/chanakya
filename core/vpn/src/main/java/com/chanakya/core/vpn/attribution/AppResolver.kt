@@ -32,8 +32,14 @@ class AppResolver(private val context: Context) {
 
     private val packageManager: PackageManager = context.packageManager
 
-    /** uid -> resolved app, or null when the uid could not be resolved. */
-    private val cache = ConcurrentHashMap<Int, AppInfo?>()
+    /**
+     * uid -> resolved app. Unresolvable uids are remembered in [unresolved] instead,
+     * because a ConcurrentHashMap rejects null values - caching a miss as null threw.
+     */
+    private val cache = ConcurrentHashMap<Int, AppInfo>()
+
+    /** uids that could not be resolved, kept so they are not looked up again. */
+    private val unresolved = ConcurrentHashMap.newKeySet<Int>()
 
     /**
      * Resolve the uid that owns the socket a DNS query came from.
@@ -83,7 +89,12 @@ class AppResolver(private val context: Context) {
      */
     fun appInfoForUid(uid: Int): AppInfo? {
         if (uid < 0) return null
-        return cache.getOrPut(uid) { lookupApp(uid) }
+        cache[uid]?.let { return it }
+        if (uid in unresolved) return null
+
+        val app = lookupApp(uid)
+        if (app != null) cache[uid] = app else unresolved.add(uid)
+        return app
     }
 
     /**
