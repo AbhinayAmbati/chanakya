@@ -20,5 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   older releases.
 - Live persistence: the VPN service records every observation to the database, so the
   Home, Apps and app detail screens now reflect real device activity.
+- User rules: allow or block any domain globally or for a single app, straight from the
+  app detail screen.
+- Blocklist management: four bundled lists (including an India-specific one) that can be
+  toggled independently, plus import of custom hosts/domain lists.
+- Background reports: a daily protection summary notification and an optional monthly
+  advertising-ID reminder.
 
 [Unreleased]: https://github.com/AbhinayAmbati/chanakya/commits/main

@@ -48,4 +48,19 @@ interface BlockedEventDao {
     /** Total number of stored events. Used to decide whether to seed demo data. */
     @Query("SELECT COUNT(*) FROM blocked_events")
     suspend fun count(): Int
+
+    /** Number of blocked queries since the given time (one-shot, for reports). */
+    @Query("SELECT COUNT(*) FROM blocked_events WHERE blocked = 1 AND timestamp >= :since")
+    suspend fun blockedSince(since: Long): Int
+
+    /** Number of distinct apps that contacted a tracker since the given time. */
+    @Query("SELECT COUNT(DISTINCT packageName) FROM blocked_events WHERE blocked = 1 AND timestamp >= :since")
+    suspend fun appsSince(since: Long): Int
+
+    /** The busiest app since the given time. */
+    @Query(
+        "SELECT packageName FROM blocked_events WHERE blocked = 1 AND timestamp >= :since " +
+            "GROUP BY packageName ORDER BY COUNT(*) DESC LIMIT 1",
+    )
+    suspend fun topAppSince(since: Long): String?
 }

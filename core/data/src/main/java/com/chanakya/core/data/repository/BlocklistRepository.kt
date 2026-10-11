@@ -1,6 +1,7 @@
 package com.chanakya.core.data.repository
 
 import android.content.Context
+import android.net.Uri
 import com.chanakya.core.data.blocklist.BlocklistCatalog
 import com.chanakya.core.data.blocklist.BlocklistParser
 import com.chanakya.core.data.db.dao.CustomBlocklistDao
@@ -100,6 +101,26 @@ class BlocklistRepository(
             settingsRepository.currentEnabledBlocklists() + entity.id,
         )
         return domains.size
+    }
+
+    /**
+     * Import a list from a document the user picked with the system file picker.
+     *
+     * @param uri the document to read.
+     * @param displayName an optional name; falls back to the file name.
+     * @return the number of domains imported.
+     */
+    suspend fun importFromUri(uri: Uri, displayName: String? = null): Int {
+        val text = try {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        } catch (exception: Exception) {
+            null
+        } ?: return 0
+
+        val name = displayName
+            ?: uri.lastPathSegment?.substringAfterLast('/')
+            ?: "Imported list"
+        return importList(name, text)
     }
 
     /** Delete an imported list. */

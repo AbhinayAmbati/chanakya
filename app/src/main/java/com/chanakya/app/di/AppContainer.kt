@@ -2,11 +2,15 @@ package com.chanakya.app.di
 
 import android.content.Context
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.chanakya.app.work.ReportScheduler
 import com.chanakya.core.data.db.ChanakyaDatabase
 import com.chanakya.core.data.db.DatabaseProvider
 import com.chanakya.core.data.prefs.SettingsRepository
+import com.chanakya.core.data.repository.BlocklistRepository
+import com.chanakya.core.data.repository.ReportRepository
 import com.chanakya.core.data.repository.RoomTrackerRepository
 import com.chanakya.core.data.repository.TrackerRepository
+import com.chanakya.core.data.repository.UserRuleRepository
 import com.chanakya.core.vpn.service.VpnConnectionManager
 
 /**
@@ -30,6 +34,24 @@ class AppContainer(private val context: Context) {
     val trackerRepository: TrackerRepository by lazy {
         RoomTrackerRepository(database.blockedEventDao(), database.appMetaDao())
     }
+
+    /** The set of blocklists and the domains they contribute. */
+    val blocklistRepository: BlocklistRepository by lazy {
+        BlocklistRepository(context, settingsRepository, database.customBlocklistDao())
+    }
+
+    /** The user's allow/block rules. */
+    val userRuleRepository: UserRuleRepository by lazy {
+        UserRuleRepository(database.userRuleDao())
+    }
+
+    /** One-shot aggregates used by the report workers. */
+    val reportRepository: ReportRepository by lazy {
+        ReportRepository(database.blockedEventDao())
+    }
+
+    /** Schedules the app's periodic background work. */
+    val reportScheduler: ReportScheduler by lazy { ReportScheduler(context) }
 
     /** Controls the local VPN. */
     val vpnConnectionManager: VpnConnectionManager by lazy { VpnConnectionManager(context) }

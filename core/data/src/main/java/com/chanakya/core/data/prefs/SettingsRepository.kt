@@ -26,6 +26,7 @@ class SettingsRepository(private val context: Context) {
         val BLOCK_IP_LEVEL = booleanPreferencesKey("block_ip_level")
         val ENABLED_BLOCKLISTS = stringSetPreferencesKey("enabled_blocklists")
         val BLOCKLISTS_INITIALISED = booleanPreferencesKey("blocklists_initialised")
+        val AD_ID_REMINDER = booleanPreferencesKey("ad_id_reminder")
     }
 
     /** Whether the local VPN should be running. */
@@ -43,6 +44,10 @@ class SettingsRepository(private val context: Context) {
     /** The set of enabled blocklist identifiers. */
     val enabledBlocklists: Flow<Set<String>> =
         context.settingsDataStore.data.map { it[Keys.ENABLED_BLOCKLISTS] ?: emptySet() }
+
+    /** Whether to send a periodic reminder to reset the advertising ID. */
+    val adIdReminder: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[Keys.AD_ID_REMINDER] ?: false }
 
     /** Enable or disable protection. */
     suspend fun setProtectionEnabled(enabled: Boolean) {
@@ -80,5 +85,10 @@ class SettingsRepository(private val context: Context) {
                 preferences[Keys.BLOCKLISTS_INITIALISED] = true
             }
         }
+    }
+
+    /** Enable or disable the periodic advertising-ID reminder. */
+    suspend fun setAdIdReminder(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.AD_ID_REMINDER] = enabled }
     }
 }

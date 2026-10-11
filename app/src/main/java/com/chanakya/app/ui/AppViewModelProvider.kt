@@ -33,7 +33,13 @@ object AppViewModelProvider {
 
     /** Factory for [AppDetailViewModel]. */
     fun appDetail(container: AppContainer, packageName: String): ViewModelProvider.Factory = viewModelFactory {
-        initializer { AppDetailViewModel(container.trackerRepository, packageName) }
+        initializer {
+            AppDetailViewModel(
+                trackerRepository = container.trackerRepository,
+                userRuleRepository = container.userRuleRepository,
+                packageName = packageName,
+            )
+        }
     }
 
     /** Factory for [SettingsViewModel]. */
@@ -41,7 +47,9 @@ object AppViewModelProvider {
         initializer {
             SettingsViewModel(
                 settingsRepository = container.settingsRepository,
-                vpnConnectionManager = container.vpnConnectionManager,
+                blocklistRepository = container.blocklistRepository,
+                userRuleRepository = container.userRuleRepository,
+                reportScheduler = container.reportScheduler,
             )
         }
     }

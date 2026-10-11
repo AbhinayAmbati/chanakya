@@ -55,11 +55,43 @@
     <string name="settings_auto_start">Start on boot</string>
     <string name="settings_auto_start_desc">Restart protection automatically after a reboot.</string>
     <string name="settings_ip_blocking">IP-level blocking</string>
-    <string name="settings_ip_blocking_desc">Also block trackers that bypass DNS using hardcoded addresses.</string>
+    <string name="settings_ip_blocking_desc">Coming soon - will also block trackers that bypass DNS using hardcoded addresses.</string>
     <string name="settings_blocklists">Blocklists</string>
     <string name="settings_ad_id">Advertising ID</string>
     <string name="settings_ad_id_desc">Open Android\'s ad settings to reset or delete your advertising ID.</string>
     <string name="settings_ad_id_action">Open ad settings</string>
     <string name="settings_about">About</string>
     <string name="settings_about_desc">Chanakya is open-source and collects no data. Version %1$s.</string>
+
+    <!-- Blocklists -->
+    <string name="settings_blocklists_desc">Blocklists are matched entirely on your device. Import a hosts file or a domain list to add your own.</string>
+    <string name="settings_import">Import a blocklist</string>
+    <string name="settings_domains_count">- %1$d domains</string>
+
+    <!-- User rules -->
+    <string name="settings_rules">Your rules</string>
+    <string name="settings_rules_empty">No rules yet. Open an app and use the menu on a domain to allow or block it.</string>
+    <string name="settings_rule_delete">Delete rule</string>
+    <string name="rule_type_block">Block</string>
+    <string name="rule_type_allow">Allow</string>
+    <string name="rule_scope_everywhere">everywhere</string>
+    <string name="app_detail_rule_menu">Rule options</string>
+    <string name="rule_block_everywhere">Block everywhere</string>
+    <string name="rule_allow_everywhere">Allow everywhere</string>
+    <string name="rule_block_for_app">Block for this app</string>
+    <string name="rule_allow_for_app">Allow for this app</string>
+
+    <!-- Advertising ID reminder -->
+    <string name="settings_ad_id_reminder">Remind me to reset it</string>
+    <string name="settings_ad_id_reminder_desc">Send a reminder every month to reset your advertising ID.</string>
+
+    <!-- Notifications -->
+    <string name="report_channel_name">Daily summary</string>
+    <string name="report_title">Your daily protection summary</string>
+    <string name="report_body">Chanakya blocked %1$d trackers across %2$d apps in the last day.</string>
+    <string name="report_body_quiet">No trackers were blocked in the last day.</string>
+    <string name="report_top_app">Top app: %1$s</string>
+    <string name="ad_id_channel_name">Advertising ID</string>
+    <string name="ad_id_reminder_title">Time to reset your advertising ID</string>
+    <string name="ad_id_reminder_body">Open Chanakya and tap \'Open ad settings\' to reset or delete your advertising ID.</string>
 </resources>
