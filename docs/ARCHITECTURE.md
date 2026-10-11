@@ -72,6 +72,18 @@ data      Room DAOs, DataStore, catalogue (in :core:data)
   Event recorded → Room → dashboard
 ```
 
+## Attribution
+
+Every DNS query is attributed to an app *while the query is in flight*, because the
+owning socket only exists for the duration of the request. On Android 10+ this uses
+`ConnectivityManager.getConnectionOwnerUid`; on older releases it falls back to reading
+`/proc/net/udp`. The resolved app is then joined against the tracker catalogue to
+produce entries like *Instagram -> Meta*.
+
+Observations are written to Room by a dedicated coroutine that drains a channel, so the
+packet loop never blocks on database I/O. The UI observes the same database through
+`TrackerRepository`, which is why the dashboard updates live.
+
 ## Dependency injection
 
 Chanakya uses **manual dependency injection** through a single `AppContainer` created in the

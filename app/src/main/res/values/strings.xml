@@ -23,6 +23,9 @@
     <string name="home_top_offenders">Top offenders today</string>
     <string name="home_top_network">Most active network</string>
     <string name="home_see_all">See all</string>
+    <string name="home_recent_activity">Recent activity</string>
+    <string name="status_blocked">Blocked</string>
+    <string name="status_allowed">Allowed</string>
 
     <!-- Apps -->
     <string name="apps_title">Apps</string>

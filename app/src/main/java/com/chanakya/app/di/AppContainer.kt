@@ -2,8 +2,8 @@ package com.chanakya.app.di
 
 import android.content.Context
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.room.Room
 import com.chanakya.core.data.db.ChanakyaDatabase
+import com.chanakya.core.data.db.DatabaseProvider
 import com.chanakya.core.data.prefs.SettingsRepository
 import com.chanakya.core.data.repository.RoomTrackerRepository
 import com.chanakya.core.data.repository.TrackerRepository
@@ -20,11 +20,8 @@ import com.chanakya.core.vpn.service.VpnConnectionManager
  */
 class AppContainer(private val context: Context) {
 
-    /** The Room database. */
-    private val database: ChanakyaDatabase by lazy {
-        Room.databaseBuilder(context, ChanakyaDatabase::class.java, ChanakyaDatabase.NAME)
-            .build()
-    }
+    /** The Room database, shared with the VPN service via [DatabaseProvider]. */
+    private val database: ChanakyaDatabase by lazy { DatabaseProvider.get(context) }
 
     /** Persisted user preferences. */
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(context) }

@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chanakya.core.data.model.AppUsageSummary
+import com.chanakya.core.data.model.BlockedEvent
 import com.chanakya.core.data.model.ProtectionSummary
 import com.chanakya.core.data.prefs.SettingsRepository
 import com.chanakya.core.data.repository.TrackerRepository
@@ -20,12 +21,14 @@ import kotlinx.coroutines.launch
  *
  * @param summary device-wide protection totals.
  * @param topOffenders the busiest apps, limited to a handful for the dashboard.
+ * @param recentEvents the most recent observations, for the live activity list.
  * @param vpnState the current tunnel state.
  * @param protectionEnabled the user's persisted preference.
  */
 data class HomeUiState(
     val summary: ProtectionSummary,
     val topOffenders: List<AppUsageSummary>,
+    val recentEvents: List<BlockedEvent>,
     val vpnState: VpnState,
     val protectionEnabled: Boolean,
 ) {
@@ -47,12 +50,14 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = combine(
         trackerRepository.observeProtectionSummary(),
         trackerRepository.observeAppSummaries(),
+        trackerRepository.observeRecentEvents(RECENT_EVENT_LIMIT),
         vpnConnectionManager.state,
         settingsRepository.protectionEnabled,
-    ) { summary, apps, vpnState, enabled ->
+    ) { summary, apps, events, vpnState, enabled ->
         HomeUiState(
             summary = summary,
             topOffenders = apps.take(3),
+            recentEvents = events,
             vpnState = vpnState,
             protectionEnabled = enabled,
         )
@@ -62,6 +67,7 @@ class HomeViewModel(
         initialValue = HomeUiState(
             summary = ProtectionSummary(0, 0, 0, null),
             topOffenders = emptyList(),
+            recentEvents = emptyList(),
             vpnState = VpnState.Stopped,
             protectionEnabled = false,
         ),
@@ -87,5 +93,6 @@ class HomeViewModel(
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+        const val RECENT_EVENT_LIMIT = 8
     }
 }

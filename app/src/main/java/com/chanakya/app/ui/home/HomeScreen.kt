@@ -30,6 +30,7 @@ import com.chanakya.app.R
 import com.chanakya.app.di.LocalAppContainer
 import com.chanakya.app.ui.AppViewModelProvider
 import com.chanakya.app.ui.common.AppRow
+import com.chanakya.core.data.model.BlockedEvent
 import com.chanakya.core.designsystem.component.ChanakyaCard
 import com.chanakya.core.designsystem.component.ChanakyaPrimaryButton
 import com.chanakya.core.designsystem.component.ChanakyaScreenTitle
@@ -37,8 +38,14 @@ import com.chanakya.core.designsystem.component.ChanakyaSecondaryButton
 import com.chanakya.core.designsystem.component.SectionHeader
 import com.chanakya.core.designsystem.component.StatRow
 import com.chanakya.core.designsystem.component.StatTile
+import com.chanakya.core.designsystem.component.StatusBadge
 import com.chanakya.core.designsystem.theme.MintGlow
+import com.chanakya.core.designsystem.theme.MonoTextStyle
 import com.chanakya.core.designsystem.theme.StatusBlocked
+import com.chanakya.core.designsystem.theme.StatusDetected
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextOverflow
 
 /**
  * The Home dashboard: the protection status, today's totals and the busiest apps.
@@ -143,6 +150,15 @@ fun HomeScreen(
             AppRow(summary = summary, onClick = onSeeAllApps)
         }
 
+        if (state.recentEvents.isNotEmpty()) {
+            item {
+                SectionHeader(title = stringResource(R.string.home_recent_activity))
+            }
+            items(state.recentEvents, key = { it.id }) { event ->
+                RecentActivityRow(event)
+            }
+        }
+
         item { Spacer(Modifier.height(16.dp)) }
     }
 }
@@ -195,6 +211,32 @@ private fun ProtectionCard(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * One line of live activity: the queried domain and whether it was blocked.
+ */
+@Composable
+private fun RecentActivityRow(event: BlockedEvent) {
+    ChanakyaCard(contentPadding = PaddingValues(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = event.domain,
+                style = MonoTextStyle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(12.dp))
+            StatusBadge(
+                text = stringResource(
+                    if (event.blocked) R.string.status_blocked else R.string.status_allowed,
+                ),
+                color = if (event.blocked) StatusBlocked else StatusDetected,
+            )
         }
     }
 }

@@ -11,24 +11,28 @@ import kotlinx.coroutines.launch
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.net.InetAddress
 
 /**
  * Reads DNS queries off the TUN interface, applies the [RuleEngine] and writes a
  * response back.
  *
  * The read loop is the hot path of the whole application, so it holds no locks and
- * does no database work: it emits a [DnsObservation] and moves on. Persistence and UI
- * updates happen elsewhere.
+ * does no database work: it resolves the owning app synchronously (the socket is only
+ * identifiable while the query is in flight), emits a [DnsObservation] and moves on.
+ * Persistence happens on a separate coroutine.
  *
  * @param descriptor the TUN interface file descriptor from `VpnService.Builder.establish`.
  * @param ruleEngine the engine used to allow or block each query.
  * @param forwarder forwards allowed queries to the real resolver.
+ * @param resolveUid resolves the owning app's uid for an in-flight query.
  * @param onObservation invoked for every query, allowed or blocked.
  */
 class DnsInterceptor(
     descriptor: ParcelFileDescriptor,
     private val ruleEngine: RuleEngine,
     private val forwarder: DnsForwarder,
+    private val resolveUid: (sourcePort: Int, sourceAddress: InetAddress, destinationAddress: InetAddress) -> Int?,
     private val onObservation: (DnsObservation) -> Unit,
 ) {
 
@@ -63,13 +67,20 @@ class DnsInterceptor(
         if (datagram.destinationPort != DNS_PORT) return
 
         val question = DnsMessage.parseQuestion(datagram.payload) ?: return
-        val decision = ruleEngine.decide(question.name)
-        val blocked = decision == RuleDecision.BLOCK
+        val blocked = ruleEngine.decide(question.name) == RuleDecision.BLOCK
+
+        // Attribute the query to an app while its socket still exists.
+        val uid = resolveUid(
+            datagram.sourcePort,
+            InetAddress.getByAddress(datagram.sourceAddress),
+            InetAddress.getByAddress(datagram.destinationAddress),
+        ) ?: UNKNOWN_UID
 
         onObservation(
             DnsObservation(
                 domain = question.name,
                 blocked = blocked,
+                uid = uid,
                 sourcePort = datagram.sourcePort,
                 timestamp = System.currentTimeMillis(),
             ),
@@ -83,12 +94,12 @@ class DnsInterceptor(
             forwarder.forward(datagram.payload) ?: return
         }
 
-        val reply = IpPacketCodec.buildReply(datagram, responsePayload)
-        output.write(reply)
+        output.write(IpPacketCodec.buildReply(datagram, responsePayload))
     }
 
     private companion object {
         const val DNS_PORT = 53
         const val MAX_PACKET_SIZE = 32_767
+        const val UNKNOWN_UID = -1
     }
 }
