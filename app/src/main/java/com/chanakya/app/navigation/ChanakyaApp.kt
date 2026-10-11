@@ -180,8 +180,19 @@ private fun BottomBarItem(
  * growing back stack.
  */
 private fun NavHostController.navigateToTopLevel(route: String) {
+    if (currentDestination?.route == route) return
+
+    val start = graph.findStartDestination()
+    if (route == start.route) {
+        // Going back to the graph's root: pop to it directly. Pairing saveState /
+        // restoreState with a navigate *to* the start destination is the combination
+        // that quietly does nothing, which left Home unreachable from the other tabs.
+        popBackStack(start.id, inclusive = false)
+        return
+    }
+
     navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo(start.id) { saveState = true }
         launchSingleTop = true
         restoreState = true
     }

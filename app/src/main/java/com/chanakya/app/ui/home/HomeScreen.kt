@@ -39,10 +39,12 @@ import com.chanakya.core.designsystem.component.SectionHeader
 import com.chanakya.core.designsystem.component.StatRow
 import com.chanakya.core.designsystem.component.StatTile
 import com.chanakya.core.designsystem.component.StatusBadge
+import com.chanakya.core.designsystem.theme.InkSlate
 import com.chanakya.core.designsystem.theme.MintGlow
 import com.chanakya.core.designsystem.theme.MonoTextStyle
 import com.chanakya.core.designsystem.theme.StatusBlocked
 import com.chanakya.core.designsystem.theme.StatusDetected
+import com.chanakya.core.designsystem.theme.SoftSlate
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.text.style.TextOverflow
@@ -175,6 +177,12 @@ private fun ProtectionCard(
     modifier: Modifier = Modifier,
 ) {
     val background = if (isProtected) MintGlow else MaterialTheme.colorScheme.surface
+    // The protected card is a fixed light mint in *both* themes, so its text has to be
+    // a fixed dark colour too. Taking it from the theme gave white-on-white in dark
+    // mode. When protection is off the card follows the theme, so theme colours are
+    // right there.
+    val titleColor = if (isProtected) InkSlate else MaterialTheme.colorScheme.onSurface
+    val bodyColor = if (isProtected) SoftSlate else MaterialTheme.colorScheme.onSurfaceVariant
     ChanakyaCard(modifier = modifier) {
         Column(
             modifier = Modifier
@@ -189,13 +197,13 @@ private fun ProtectionCard(
                 text = if (isProtected) stringResource(R.string.home_protected)
                 else stringResource(R.string.home_not_protected),
                 style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = titleColor,
             )
             Text(
                 text = if (isProtected) stringResource(R.string.home_protection_on_body)
                 else stringResource(R.string.home_protection_off_body),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = bodyColor,
             )
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {

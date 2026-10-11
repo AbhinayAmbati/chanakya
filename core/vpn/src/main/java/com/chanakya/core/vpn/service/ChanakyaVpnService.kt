@@ -1,5 +1,6 @@
 package com.chanakya.core.vpn.service
 
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -63,6 +64,7 @@ class ChanakyaVpnService : VpnService() {
 
     private val ruleEngineHolder = RuleEngineHolder(RuleEngine(BlocklistStore.STARTER))
     private val notification by lazy { VpnNotification(this) }
+    private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
 
     private lateinit var appResolver: AppResolver
     private lateinit var eventRecorder: EventRecorder
@@ -195,6 +197,13 @@ class ChanakyaVpnService : VpnService() {
                 blockedThisSession = sessionBlocked,
             )
         }
+        // Keep the ongoing notification's count in step with the session. It was built
+        // once when the tunnel came up - at zero - and never refreshed, so it always
+        // read 0 even while the app showed a real total.
+        notificationManager?.notify(
+            VpnNotification.NOTIFICATION_ID,
+            notification.build(sessionBlocked),
+        )
     }
 
     private fun rebuildTunnel() {
