@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import java.net.Inet4Address
 import java.net.InetAddress
 
 /**
@@ -42,10 +43,10 @@ import java.net.InetAddress
  * blocks queries to known trackers and records what it saw. No traffic is ever
  * forwarded to an external server.
  *
- * How DNS is captured: the tunnel advertises **its own resolvers** - IPv4 and IPv6 - and
- * routes exactly those, so the system sends DNS to us by construction. Nothing else is
- * routed, which is what keeps the device's own connectivity intact; see
- * [establishTunnel] for why the real resolvers are deliberately left alone.
+ * How DNS is captured: the tunnel routes the device's **real resolvers** into itself, so
+ * the lookups the system was going to make anyway pass through us and get filtered. It
+ * deliberately does **not** advertise a resolver of its own - see [establishTunnel] for
+ * why that is what broke Android's Private DNS.
  *
  * The upstream resolvers used to relay allowed queries are read from a **non-VPN**
  * network. That matters: once our own tunnel is up it becomes the active network, and
@@ -361,20 +362,33 @@ class ChanakyaVpnService : VpnService() {
             .addAddress(VPN_ADDRESS, VPN_PREFIX_LENGTH)
             .addAddress(VPN_V6_ADDRESS, VPN_V6_PREFIX_LENGTH)
 
-        // Advertise our own resolvers - IPv4 and IPv6 - and route them, so the system
-        // sends DNS to us by construction.
+        // Capture DNS by routing the device's *real* resolvers into the tunnel, not by
+        // advertising a resolver of our own.
         //
-        // Deliberately the *only* addresses routed. The device's real resolvers are NOT
-        // routed in: doing so made relaying depend on protect() succeeding, because a
-        // query to a routed resolver would be captured by our own tunnel again. When
-        // protect() did not take effect that became a loop - every lookup hung and the
-        // whole connection went dead. Leaving them unrouted means a relay that is not
-        // protected simply leaves the device over the real network, as it should.
-        builder.addDnsServer(VPN_DNS_ADDRESS)
-        builder.addRoute(VPN_DNS_ADDRESS, 32)
-        builder.addDnsServer(VPN_DNS_V6_ADDRESS)
-        builder.addRoute(VPN_DNS_V6_ADDRESS, VPN_V6_PREFIX_LENGTH)
-        routedDnsServers = 2
+        // Advertising one is what broke Android's Private DNS. In "Automatic" mode the
+        // platform probes DNS-over-TLS against the resolver the network advertises, so
+        // it probed ours - and a tunnel that speaks only plain UDP can never complete a
+        // TLS handshake, which left the device resolving nothing. Resetting that probe
+        // was not enough: the platform still had no usable resolver to fall back to.
+        //
+        // Leaving the device's own resolvers in place means the platform talks to a
+        // resolver it is happy with, while the plaintext lookups it makes still pass
+        // through us and are filtered.
+        routedDnsServers = 0
+        upstreamServers.forEach { address ->
+            val host = address.hostAddress?.substringBefore('%') ?: return@forEach
+            val prefix = if (address is Inet4Address) 32 else 128
+            builder.addRoute(host, prefix)
+            routedDnsServers += 1
+        }
+
+        if (routedDnsServers == 0) {
+            // Nothing discoverable to ride on, so advertise our own after all. Filtering
+            // still works; Private DNS has to be off, which the app explains.
+            builder.addDnsServer(VPN_DNS_ADDRESS)
+            builder.addRoute(VPN_DNS_ADDRESS, 32)
+            routedDnsServers = 1
+        }
 
         if (tunnelBlockIpLevel) {
             addIpBlockRoutes(builder, upstreamServers)
@@ -492,7 +506,6 @@ class ChanakyaVpnService : VpnService() {
         // without one, a query arriving over IPv6 has no address to reply from and is
         // silently discarded, which on an IPv6-heavy carrier looks like a dead network.
         private const val VPN_V6_ADDRESS = "fd00:1:fd00:1:fd00:1:fd00:1"
-        private const val VPN_DNS_V6_ADDRESS = "fd00:1:fd00:1:fd00:1:fd00:2"
         private const val VPN_V6_PREFIX_LENGTH = 128
         private const val UNKNOWN_PACKAGE = "unknown"
         private const val IP_BLOCKLIST_ASSET = "blocklists/ip_ranges.txt"
