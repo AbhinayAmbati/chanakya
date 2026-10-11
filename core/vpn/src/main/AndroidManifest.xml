@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Needed to reach the real DNS resolvers for allowed queries. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Needed to read the device's current DNS servers (ConnectivityManager). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- The VPN service must be a foreground service so the system keeps it alive. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />

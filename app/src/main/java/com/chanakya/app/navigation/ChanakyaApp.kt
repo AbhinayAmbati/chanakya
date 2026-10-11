@@ -2,9 +2,9 @@ package com.chanakya.app.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +33,7 @@ private data class TopLevelDestination(
 
 private val topLevelDestinations = listOf(
     TopLevelDestination(Destinations.HOME, R.string.nav_home, Icons.Filled.Home),
-    TopLevelDestination(Destinations.APPS, R.string.nav_apps, Icons.Filled.List),
+    TopLevelDestination(Destinations.APPS, R.string.nav_apps, Icons.AutoMirrored.Filled.List),
     TopLevelDestination(Destinations.REPORTS, R.string.nav_reports, Icons.Filled.DateRange),
     TopLevelDestination(Destinations.SETTINGS, R.string.nav_settings, Icons.Filled.Settings),
 )
