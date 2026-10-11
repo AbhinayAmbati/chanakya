@@ -35,6 +35,8 @@ import java.net.InetAddress
  * @param ipBlocklist the ranges to drop; [IpBlocklist.EMPTY] when IP-level blocking is off.
  * @param resolveApp attributes an in-flight packet to the app that sent it.
  * @param onObservation invoked for every query and every dropped packet.
+ * @param onRelayResult invoked for every allowed query with whether relaying it
+ *   upstream succeeded. Used to notice when relaying is broken and back out.
  */
 class TunInterceptor(
     descriptor: ParcelFileDescriptor,
@@ -43,6 +45,7 @@ class TunInterceptor(
     private val ipBlocklist: IpBlocklist,
     private val resolveApp: (sourcePort: Int, sourceAddress: InetAddress, destinationAddress: InetAddress) -> ResolvedApp?,
     private val onObservation: (DnsObservation) -> Unit,
+    private val onRelayResult: (Boolean) -> Unit = {},
 ) {
 
     private val input = FileInputStream(descriptor.fileDescriptor)
@@ -113,6 +116,8 @@ class TunInterceptor(
             ),
         )
 
+        val forwardResult = if (blocked) null else forwarder.forward(datagram.payload)
+
         val responsePayload = if (blocked) {
             // Answer locally: the query never reaches the network.
             DnsMessage.buildBlockedResponse(datagram.payload, question)
@@ -120,11 +125,14 @@ class TunInterceptor(
             // Forward upstream and relay the genuine answer. If relaying fails we still
             // answer - with SERVFAIL - rather than dropping the packet, so the app is
             // never left hanging with no reply at all.
-            forwarder.forward(datagram.payload)
-                ?: DnsMessage.buildServFailResponse(datagram.payload, question)
+            forwardResult ?: DnsMessage.buildServFailResponse(datagram.payload, question)
         }
 
         output.write(IpPacketCodec.buildReply(datagram, responsePayload))
+
+        // Report the outcome last: the fail-open path tears the tunnel down, so it must
+        // not run in the middle of writing a reply.
+        if (!blocked) onRelayResult(forwardResult != null)
     }
 
     /** Log and drop a packet destined for a blocked IP range. */

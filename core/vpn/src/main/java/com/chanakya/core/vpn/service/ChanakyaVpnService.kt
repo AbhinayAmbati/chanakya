@@ -85,6 +85,12 @@ class ChanakyaVpnService : VpnService() {
     private var sessionBlocked = 0
     private var routedDnsServers = 0
 
+    /** Allowed lookups we have tried to relay this session. */
+    private var relayAttempts = 0
+
+    /** How many of those were relayed successfully. */
+    private var relaySuccesses = 0
+
     /** The real network the tunnel rides on; handed to the builder as the underlying network. */
     @Volatile
     private var underlyingNetwork: Network? = null
@@ -127,6 +133,8 @@ class ChanakyaVpnService : VpnService() {
     private fun startProtection() {
         if (tunInterface != null) return
         VpnStatus.update(VpnState.Starting)
+        relayAttempts = 0
+        relaySuccesses = 0
 
         startForeground(VpnNotification.NOTIFICATION_ID, notification.build(sessionBlocked))
 
@@ -170,6 +178,7 @@ class ChanakyaVpnService : VpnService() {
                 if (sessionObservations % DIAGNOSTICS_SAMPLE == 0) publishDiagnostics()
                 observationQueue.trySend(observation)
             },
+            onRelayResult = ::noteRelayResult,
         )
         interceptionJob = interceptor.start(scope)
 
@@ -261,11 +270,56 @@ class ChanakyaVpnService : VpnService() {
         tunInterface = null
     }
 
+    /**
+     * Record the outcome of relaying one allowed lookup, and fail open once it is clear
+     * that relaying is not working at all.
+     */
+    private fun noteRelayResult(success: Boolean) {
+        relayAttempts += 1
+        if (success) relaySuccesses += 1
+        if (relaySuccesses == 0 && relayAttempts >= RELAY_FAILURE_THRESHOLD) failOpen()
+    }
+
+    /**
+     * Give the user their connection back.
+     *
+     * Reached when every allowed lookup we have tried to relay has failed - at that
+     * point we are filtering nothing useful and we are the reason the device cannot
+     * resolve anything. A blocker that quietly leaves the user offline is worse than one
+     * that switches itself off and says so, so the tunnel comes down and protection is
+     * turned off rather than kept.
+     */
+    private fun failOpen() {
+        if (tunInterface == null) return
+        tearDownTunnel()
+        sessionObservations = 0
+        sessionBlocked = 0
+        routedDnsServers = 0
+        relayAttempts = 0
+        relaySuccesses = 0
+        publishDiagnostics()
+        VpnStatus.update(VpnState.Error(RELAY_FAILURE_MESSAGE))
+
+        // The scope that ran the tunnel is gone, so persist the setting on a fresh one.
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                settingsRepository.setProtectionEnabled(false)
+            } catch (exception: Exception) {
+                // Best effort; the tunnel is already down either way.
+            }
+        }
+
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     private fun stopProtection() {
         tearDownTunnel()
         sessionObservations = 0
         sessionBlocked = 0
         routedDnsServers = 0
+        relayAttempts = 0
+        relaySuccesses = 0
         publishDiagnostics()
         VpnStatus.update(VpnState.Stopped)
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -436,6 +490,13 @@ class ChanakyaVpnService : VpnService() {
 
         /** How often the diagnostics counters are published, in observations. */
         private const val DIAGNOSTICS_SAMPLE = 10
+
+        /** Allowed lookups to attempt before concluding that relaying is broken. */
+        private const val RELAY_FAILURE_THRESHOLD = 10
+
+        /** Surfaced when protection switched itself off because relaying was failing. */
+        private const val RELAY_FAILURE_MESSAGE =
+            "Protection turned off: Chanakya could not reach the network on your behalf"
 
         /** Used to relay allowed queries when the device exposes no resolver. */
         private val FALLBACK_RESOLVERS: List<InetAddress> = listOf(
