@@ -3,7 +3,6 @@ package com.chanakya.core.data.repository
 import com.chanakya.core.data.catalog.TrackerCatalog
 import com.chanakya.core.data.db.dao.AppMetaDao
 import com.chanakya.core.data.db.dao.BlockedEventDao
-import com.chanakya.core.data.db.entity.toEntity
 import com.chanakya.core.data.db.entity.toModel
 import com.chanakya.core.data.model.AppInfo
 import com.chanakya.core.data.model.AppUsageSummary
@@ -96,13 +95,6 @@ class RoomTrackerRepository(
 
     override fun observeRecentEvents(limit: Int): Flow<List<BlockedEvent>> =
         eventDao.observeRecent(limit).map { list -> list.map { it.toModel() } }
-
-    override suspend fun seedDemoData() {
-        // Seed only once so repeated debug launches do not multiply the data.
-        if (eventDao.count() > 0) return
-        appDao.upsertAll(com.chanakya.core.data.sample.SampleData.apps.map { it.toEntity() })
-        eventDao.insertAll(com.chanakya.core.data.sample.SampleData.events().map { it.toEntity() })
-    }
 
     // ---- Helpers ----------------------------------------------------------
 

@@ -67,10 +67,6 @@ interface BlockedEventDao {
     @Query("DELETE FROM blocked_events WHERE timestamp < :before")
     suspend fun pruneBefore(before: Long)
 
-    /** Total number of stored events. Used to decide whether to seed demo data. */
-    @Query("SELECT COUNT(*) FROM blocked_events")
-    suspend fun count(): Int
-
     /** Number of blocked queries since the given time (one-shot, for reports). */
     @Query("SELECT COUNT(*) FROM blocked_events WHERE blocked = 1 AND timestamp >= :since")
     suspend fun blockedSince(since: Long): Int

@@ -24,9 +24,6 @@ interface TrackerRepository {
 
     /** The most recent raw events, for live views. */
     fun observeRecentEvents(limit: Int = 100): Flow<List<BlockedEvent>>
-
-    /** Seeds demonstration data. Only called from debug builds. */
-    suspend fun seedDemoData()
 }
 
 /**

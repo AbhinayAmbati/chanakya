@@ -31,4 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - App detail: domains governed by a user rule are now marked, and app icons replace the
   letter avatars across the app.
 
+### Removed
+
+- Debug builds no longer seed demonstration data; every figure the app shows now comes
+  from real device activity.
+
 [Unreleased]: https://github.com/AbhinayAmbati/chanakya/commits/main

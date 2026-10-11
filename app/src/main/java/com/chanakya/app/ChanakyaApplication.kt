@@ -3,15 +3,13 @@ package com.chanakya.app
 import android.app.Application
 import com.chanakya.app.di.AppContainer
 import com.chanakya.app.work.ReportScheduler
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 /**
  * The application entry point. Creates the single [AppContainer] that wires the whole
- * dependency graph together, schedules the daily protection summary, and - in debug
- * builds only - seeds demonstration data.
+ * dependency graph together and schedules the daily protection summary.
+ *
+ * Nothing is seeded or synthesised here: every figure the app displays comes from real
+ * activity recorded by the VPN service.
  */
 class ChanakyaApplication : Application() {
 
@@ -25,11 +23,5 @@ class ChanakyaApplication : Application() {
 
         // The daily summary is idempotent: re-scheduling never duplicates the job.
         ReportScheduler(this).scheduleDailyReport()
-
-        if (BuildConfig.DEBUG) {
-            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                container.trackerRepository.seedDemoData()
-            }
-        }
     }
 }
