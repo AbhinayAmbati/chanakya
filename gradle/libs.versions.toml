@@ -1,7 +1,7 @@
 # Gradle Version Catalog - the single source of truth for every dependency and
 # plugin version used in the project. Bump versions here, never in module files.
 [versions]
-agp = "8.7.3"
+agp = "9.4.1"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
 coreKtx = "1.15.0"
