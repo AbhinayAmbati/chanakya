@@ -1,0 +1,87 @@
+package com.chanakya.app.navigation
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.chanakya.app.R
+
+/** A bottom-navigation destination. */
+private data class TopLevelDestination(
+    val route: String,
+    val labelRes: Int,
+    val icon: ImageVector,
+)
+
+private val topLevelDestinations = listOf(
+    TopLevelDestination(Destinations.HOME, R.string.nav_home, Icons.Filled.Home),
+    TopLevelDestination(Destinations.APPS, R.string.nav_apps, Icons.Filled.List),
+    TopLevelDestination(Destinations.REPORTS, R.string.nav_reports, Icons.Filled.DateRange),
+    TopLevelDestination(Destinations.SETTINGS, R.string.nav_settings, Icons.Filled.Settings),
+)
+
+/**
+ * The root composable. Hosts the navigation graph and shows a bottom bar on the
+ * top-level screens.
+ */
+@Composable
+fun ChanakyaApp() {
+    val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = backStackEntry?.destination
+    val showBottomBar = currentDestination?.route in Destinations.topLevel
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    topLevelDestinations.forEach { destination ->
+                        val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { navController.navigateToTopLevel(destination.route) },
+                            icon = { Icon(destination.icon, contentDescription = null) },
+                            label = { Text(stringResource(destination.labelRes)) },
+                        )
+                    }
+                }
+            }
+        },
+    ) { innerPadding ->
+        ChanakyaNavHost(
+            navController = navController,
+            modifier = Modifier.padding(innerPadding),
+        )
+    }
+}
+
+/**
+ * Navigate to a top-level destination, reusing the existing instance and avoiding a
+ * growing back stack.
+ */
+private fun NavHostController.navigateToTopLevel(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}

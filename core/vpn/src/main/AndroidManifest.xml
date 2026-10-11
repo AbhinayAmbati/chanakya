@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The VPN service must be a foreground service so the system keeps it alive. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <application>
+        <!--
+          The core of the app: a local VpnService. It is protected by
+          BIND_VPN_SERVICE so only the system can bind to it, and it advertises the
+          android.net.VpnService intent filter so the system can discover it.
+        -->
+        <service
+            android:name="com.chanakya.core.vpn.service.ChanakyaVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn_traffic_filtering" />
+        </service>
+    </application>
+</manifest>

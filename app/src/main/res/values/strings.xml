@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chanakya</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_apps">Apps</string>
+    <string name="nav_reports">Reports</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Home -->
+    <string name="home_title">Chanakya</string>
+    <string name="home_subtitle">Local protection. Nothing leaves your device.</string>
+    <string name="home_protected">Protected</string>
+    <string name="home_not_protected">Protection is off</string>
+    <string name="home_protection_on_body">Chanakya is watching your DNS traffic and blocking known trackers.</string>
+    <string name="home_protection_off_body">Turn on protection to start seeing and blocking trackers.</string>
+    <string name="home_turn_on">Turn on protection</string>
+    <string name="home_turn_off">Turn off</string>
+    <string name="home_blocked_today">Blocked today</string>
+    <string name="home_apps_tracked">Apps tracked</string>
+    <string name="home_blocked_total">Blocked all-time</string>
+    <string name="home_top_offenders">Top offenders today</string>
+    <string name="home_top_network">Most active network</string>
+    <string name="home_see_all">See all</string>
+
+    <!-- Apps -->
+    <string name="apps_title">Apps</string>
+    <string name="apps_subtitle">Apps that contacted a tracker</string>
+    <string name="apps_empty_title">No activity yet</string>
+    <string name="apps_empty_body">Once protection is on, apps that contact trackers will appear here.</string>
+
+    <!-- App detail -->
+    <string name="app_detail_back">Back</string>
+    <string name="app_detail_blocked">Blocked</string>
+    <string name="app_detail_allowed">Allowed</string>
+    <string name="app_detail_networks">Tracker networks</string>
+    <string name="app_detail_domains">Recent domains</string>
+    <string name="app_detail_no_domains">No domains recorded yet.</string>
+
+    <!-- Reports -->
+    <string name="reports_title">Reports</string>
+    <string name="reports_subtitle">A summary of your protection</string>
+    <string name="reports_today">Today</string>
+    <string name="reports_all_time">All time</string>
+    <string name="reports_top_apps">Most active apps</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_subtitle">Control how Chanakya protects you</string>
+    <string name="settings_protection">Protection</string>
+    <string name="settings_auto_start">Start on boot</string>
+    <string name="settings_auto_start_desc">Restart protection automatically after a reboot.</string>
+    <string name="settings_ip_blocking">IP-level blocking</string>
+    <string name="settings_ip_blocking_desc">Also block trackers that bypass DNS using hardcoded addresses.</string>
+    <string name="settings_blocklists">Blocklists</string>
+    <string name="settings_ad_id">Advertising ID</string>
+    <string name="settings_ad_id_desc">Open Android\'s ad settings to reset or delete your advertising ID.</string>
+    <string name="settings_ad_id_action">Open ad settings</string>
+    <string name="settings_about">About</string>
+    <string name="settings_about_desc">Chanakya is open-source and collects no data. Version %1$s.</string>
+</resources>

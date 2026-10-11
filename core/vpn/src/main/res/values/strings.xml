@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vpn_notification_channel">Protection</string>
+    <string name="vpn_notification_channel_description">Shows the status of Chanakya protection.</string>
+    <string name="vpn_notification_title">Chanakya is protecting you</string>
+    <string name="vpn_notification_text">%1$d trackers blocked this session</string>
+</resources>
