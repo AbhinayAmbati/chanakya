@@ -2,7 +2,7 @@
 # plugin version used in the project. Bump versions here, never in module files.
 [versions]
 agp = "8.7.3"
-kotlin = "2.0.21"
+kotlin = "2.4.20"
 ksp = "2.0.21-1.0.28"
 coreKtx = "1.15.0"
 lifecycle = "2.8.7"
