@@ -83,8 +83,23 @@ class TunInterceptor(
             return
         }
 
+        // The tunnel carries no TCP streams, so anything TCP that lands here is reset
+        // immediately rather than left to hang. That is what defuses Android's Private
+        // DNS: its DNS-over-TLS probe arrives on port 853, fails at once, and the
+        // platform falls back to the plain port-53 DNS we do answer.
+        if (header.protocol == PROTOCOL_TCP) {
+            handleTcpReset(buffer, length)
+            return
+        }
+
         if (ipBlocklist.isEmpty || !ipBlocklist.contains(header.destinationAddress)) return
         handleIpBlock(header)
+    }
+
+    /** Refuse a TCP connection by resetting it. */
+    private fun handleTcpReset(buffer: ByteArray, length: Int) {
+        val segment = IpPacketCodec.parseTcp(buffer, length) ?: return
+        output.write(IpPacketCodec.buildTcpReset(segment))
     }
 
     /** Parse, decide and answer a DNS query. */
@@ -164,6 +179,7 @@ class TunInterceptor(
     private companion object {
         const val DNS_PORT = 53
         const val PROTOCOL_UDP = 17
+        const val PROTOCOL_TCP = 6
         const val MAX_PACKET_SIZE = 32_767
         const val UNKNOWN_UID = -1
         const val UNKNOWN_PACKAGE = "unknown"

@@ -8,6 +8,9 @@ package com.chanakya.core.vpn.dns
  * address families are supported; IPv6 extension headers are not (a packet that uses
  * them is simply ignored rather than mis-parsed).
  *
+ * TCP is parsed only far enough to refuse it: the tunnel carries no TCP streams, so a
+ * connection that reaches it is answered with a reset. See [buildTcpReset].
+ *
  * Every function here is pure and operates on byte arrays, so it is covered by unit
  * tests with hand-built fixtures.
  */
@@ -248,6 +251,175 @@ object IpPacketCodec {
         return packet
     }
 
+    // ---- TCP (reset only) --------------------------------------------------
+
+    /** Length of a TCP header with no options. */
+    private const val TCP_HEADER_LENGTH = 20
+
+    private const val TCP_FLAG_FIN = 0x01
+    private const val TCP_FLAG_SYN = 0x02
+    private const val TCP_FLAG_RST = 0x04
+    private const val TCP_FLAG_ACK = 0x10
+
+    /**
+     * A parsed TCP segment, reduced to the fields a reset reply needs.
+     *
+     * @param sequenceNumber the sender's sequence number.
+     * @param acknowledgmentNumber the sender's acknowledgement, when [flags] has ACK set.
+     * @param flags the raw TCP flag byte.
+     * @param payloadLength how many bytes of payload followed the header.
+     */
+    data class TcpSegment(
+        val sourceAddress: ByteArray,
+        val destinationAddress: ByteArray,
+        val sourcePort: Int,
+        val destinationPort: Int,
+        val sequenceNumber: Long,
+        val acknowledgmentNumber: Long,
+        val flags: Int,
+        val payloadLength: Int,
+    ) {
+        override fun equals(other: Any?): Boolean =
+            other is TcpSegment && sourcePort == other.sourcePort &&
+                destinationPort == other.destinationPort && sequenceNumber == other.sequenceNumber
+
+        override fun hashCode(): Int = destinationPort
+    }
+
+    /** Parse a TCP segment (IPv4 or IPv6). */
+    fun parseTcp(buffer: ByteArray, length: Int): TcpSegment? = when (ipVersion(buffer, length)) {
+        4 -> parseIpv4Tcp(buffer, length)
+        6 -> parseIpv6Tcp(buffer, length)
+        else -> null
+    }
+
+    /** Parse an IPv4 TCP segment. */
+    private fun parseIpv4Tcp(buffer: ByteArray, length: Int): TcpSegment? {
+        if (length < IPV4_HEADER_LENGTH + TCP_HEADER_LENGTH) return null
+        val headerLength = (buffer[0].toInt() and 0x0F) * 4
+        if (headerLength < IPV4_HEADER_LENGTH || length < headerLength + TCP_HEADER_LENGTH) return null
+        if ((buffer[9].toInt() and 0xFF) != PROTOCOL_TCP) return null
+
+        return readTcpSegment(
+            buffer = buffer,
+            tcpOffset = headerLength,
+            end = length,
+            sourceAddress = buffer.copyOfRange(12, 16),
+            destinationAddress = buffer.copyOfRange(16, 20),
+        )
+    }
+
+    /** Parse an IPv6 TCP segment (without extension headers). */
+    private fun parseIpv6Tcp(buffer: ByteArray, length: Int): TcpSegment? {
+        if (length < IPV6_HEADER_LENGTH + TCP_HEADER_LENGTH) return null
+        if ((buffer[6].toInt() and 0xFF) != PROTOCOL_TCP) return null
+
+        return readTcpSegment(
+            buffer = buffer,
+            tcpOffset = IPV6_HEADER_LENGTH,
+            end = length,
+            sourceAddress = buffer.copyOfRange(8, 24),
+            destinationAddress = buffer.copyOfRange(24, 40),
+        )
+    }
+
+    /** Read the shared TCP header fields. */
+    private fun readTcpSegment(
+        buffer: ByteArray,
+        tcpOffset: Int,
+        end: Int,
+        sourceAddress: ByteArray,
+        destinationAddress: ByteArray,
+    ): TcpSegment? {
+        val headerLength = ((buffer[tcpOffset + 12].toInt() and 0xF0) shr 4) * 4
+        if (headerLength < TCP_HEADER_LENGTH) return null
+
+        val payloadLength = (minOf(end, buffer.size) - tcpOffset - headerLength).coerceAtLeast(0)
+        return TcpSegment(
+            sourceAddress = sourceAddress,
+            destinationAddress = destinationAddress,
+            sourcePort = readUnsignedShort(buffer, tcpOffset),
+            destinationPort = readUnsignedShort(buffer, tcpOffset + 2),
+            sequenceNumber = readUnsignedInt(buffer, tcpOffset + 4),
+            acknowledgmentNumber = readUnsignedInt(buffer, tcpOffset + 8),
+            flags = buffer[tcpOffset + 13].toInt() and 0xFF,
+            payloadLength = payloadLength,
+        )
+    }
+
+    /**
+     * Build a reset that refuses the given connection.
+     *
+     * This is what makes Android's Private DNS harmless: with it set to "Automatic",
+     * the platform probes DNS-over-TLS on port 853 against the resolver the network
+     * advertises - which, while the tunnel is up, is ours. Answering the probe with a
+     * reset makes it fail at once, so the platform falls back to plain port-53 DNS,
+     * which the tunnel does answer. Dropping the probe instead leaves it hanging and
+     * the device resolves nothing at all.
+     */
+    fun buildTcpReset(segment: TcpSegment): ByteArray {
+        val ipv6 = segment.sourceAddress.size == 16
+        val ipHeaderLength = if (ipv6) IPV6_HEADER_LENGTH else IPV4_HEADER_LENGTH
+        val totalLength = ipHeaderLength + TCP_HEADER_LENGTH
+        val packet = ByteArray(totalLength)
+
+        // RFC 793: a reset acknowledging an ACK carries its sequence and no ACK flag;
+        // otherwise it acknowledges what was received.
+        val resetSequence: Long
+        val resetAck: Long
+        val resetFlags: Int
+        if (segment.flags and TCP_FLAG_ACK != 0) {
+            resetSequence = segment.acknowledgmentNumber
+            resetAck = 0
+            resetFlags = TCP_FLAG_RST
+        } else {
+            var advance = segment.payloadLength.toLong()
+            if (segment.flags and TCP_FLAG_SYN != 0) advance += 1
+            if (segment.flags and TCP_FLAG_FIN != 0) advance += 1
+            resetSequence = 0
+            resetAck = (segment.sequenceNumber + advance) and 0xFFFFFFFFL
+            resetFlags = TCP_FLAG_RST or TCP_FLAG_ACK
+        }
+
+        if (ipv6) {
+            packet[0] = 0x60.toByte()                     // version 6
+            writeShort(packet, 4, TCP_HEADER_LENGTH)      // payload length
+            packet[6] = PROTOCOL_TCP.toByte()             // next header
+            packet[7] = 64                                // hop limit
+            segment.destinationAddress.copyInto(packet, 8)
+            segment.sourceAddress.copyInto(packet, 24)
+        } else {
+            packet[0] = 0x45                              // version 4, IHL 5
+            writeShort(packet, 2, totalLength)            // total length
+            writeShort(packet, 6, 0x4000)                 // flags: don't fragment
+            packet[8] = 64                                // TTL
+            packet[9] = PROTOCOL_TCP.toByte()             // protocol
+            segment.destinationAddress.copyInto(packet, 12)
+            segment.sourceAddress.copyInto(packet, 16)
+            writeShort(packet, 10, checksum(packet, 0, IPV4_HEADER_LENGTH))
+        }
+
+        val tcpOffset = ipHeaderLength
+        writeShort(packet, tcpOffset, segment.destinationPort)
+        writeShort(packet, tcpOffset + 2, segment.sourcePort)
+        writeInt(packet, tcpOffset + 4, resetSequence)
+        writeInt(packet, tcpOffset + 8, resetAck)
+        packet[tcpOffset + 12] = (5 shl 4).toByte()       // data offset 5, no options
+        packet[tcpOffset + 13] = resetFlags.toByte()
+        writeShort(packet, tcpOffset + 14, 0)             // window
+        writeShort(packet, tcpOffset + 16, 0)             // checksum, filled below
+        writeShort(packet, tcpOffset + 18, 0)             // urgent pointer
+
+        val tcpChecksum = if (ipv6) {
+            tcpChecksumIpv6(packet, tcpOffset, TCP_HEADER_LENGTH)
+        } else {
+            tcpChecksumIpv4(packet, tcpOffset, TCP_HEADER_LENGTH)
+        }
+        writeShort(packet, tcpOffset + 16, tcpChecksum)
+
+        return packet
+    }
+
     // ---- Helpers -----------------------------------------------------------
 
     /** The IP version of a packet, or 0 when it is too short to tell. */
@@ -324,5 +496,44 @@ object IpPacketCodec {
         var value = sum
         while (value shr 16 != 0L) value = (value and 0xFFFF) + (value shr 16)
         return (value.inv() and 0xFFFF).toInt()
+    }
+
+    /** Read a big-endian unsigned 32-bit value as a Long. */
+    private fun readUnsignedInt(buffer: ByteArray, offset: Int): Long =
+        ((buffer[offset].toLong() and 0xFF) shl 24) or
+            ((buffer[offset + 1].toLong() and 0xFF) shl 16) or
+            ((buffer[offset + 2].toLong() and 0xFF) shl 8) or
+            (buffer[offset + 3].toLong() and 0xFF)
+
+    /** Write a Long as a big-endian 32-bit value. */
+    private fun writeInt(buffer: ByteArray, offset: Int, value: Long) {
+        buffer[offset] = ((value shr 24) and 0xFF).toByte()
+        buffer[offset + 1] = ((value shr 16) and 0xFF).toByte()
+        buffer[offset + 2] = ((value shr 8) and 0xFF).toByte()
+        buffer[offset + 3] = (value and 0xFF).toByte()
+    }
+
+    /** TCP checksum including the IPv4 pseudo-header. */
+    private fun tcpChecksumIpv4(packet: ByteArray, tcpOffset: Int, tcpLength: Int): Int {
+        var sum = 0L
+        for (i in 12 until 20 step 2) {
+            sum += ((packet[i].toInt() and 0xFF) shl 8) or (packet[i + 1].toInt() and 0xFF)
+        }
+        sum += PROTOCOL_TCP
+        sum += tcpLength
+        sum += sum16BitWords(packet, tcpOffset, tcpLength)
+        return foldChecksum(sum)
+    }
+
+    /** TCP checksum including the IPv6 pseudo-header (mandatory in IPv6). */
+    private fun tcpChecksumIpv6(packet: ByteArray, tcpOffset: Int, tcpLength: Int): Int {
+        var sum = 0L
+        for (i in 8 until 40 step 2) {
+            sum += ((packet[i].toInt() and 0xFF) shl 8) or (packet[i + 1].toInt() and 0xFF)
+        }
+        sum += tcpLength
+        sum += PROTOCOL_TCP
+        sum += sum16BitWords(packet, tcpOffset, tcpLength)
+        return foldChecksum(sum)
     }
 }
