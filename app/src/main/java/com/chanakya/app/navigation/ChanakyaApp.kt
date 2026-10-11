@@ -23,6 +23,16 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.chanakya.app.R
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.chanakya.app.di.LocalAppContainer
+import kotlinx.coroutines.flow.first
 
 /** A bottom-navigation destination. */
 private data class TopLevelDestination(
@@ -45,6 +55,10 @@ private val topLevelDestinations = listOf(
 @Composable
 fun ChanakyaApp() {
     val navController = rememberNavController()
+
+    // Ask for the notification permission once, so the daily summary can appear.
+    NotificationPermissionEffect()
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val showBottomBar = currentDestination?.route in Destinations.topLevel
@@ -83,5 +97,32 @@ private fun NavHostController.navigateToTopLevel(route: String) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+/**
+ * Requests the notification permission once on Android 13+, recording that the prompt
+ * has been shown so the user is not asked again on every launch.
+ */
+@Composable
+private fun NotificationPermissionEffect() {
+    val container = LocalAppContainer.current
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* The result is reflected in the system settings either way. */ }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@LaunchedEffect
+
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) return@LaunchedEffect
+        if (container.settingsRepository.notificationPromptShown.first()) return@LaunchedEffect
+
+        container.settingsRepository.setNotificationPromptShown()
+        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }

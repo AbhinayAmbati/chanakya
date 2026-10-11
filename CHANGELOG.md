@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - App detail: domains governed by a user rule are now marked, and app icons replace the
   letter avatars across the app.
 
+### Fixed
+
+- "Start on boot" now actually restarts protection after a reboot.
+- The notification permission is requested on first launch, so the daily summary can
+  appear on Android 13+.
+- Blocked events are rolled up into daily aggregates and pruned after 30 days, keeping
+  the database bounded while lifetime totals stay accurate.
+
 ### Removed
 
 - Debug builds no longer seed demonstration data; every figure the app shows now comes

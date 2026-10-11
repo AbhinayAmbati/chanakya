@@ -28,7 +28,7 @@ object DatabaseProvider {
                 context.applicationContext,
                 ChanakyaDatabase::class.java,
                 ChanakyaDatabase.NAME,
-            ).addMigrations(MIGRATION_1_2)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 .also { instance = it }
         }

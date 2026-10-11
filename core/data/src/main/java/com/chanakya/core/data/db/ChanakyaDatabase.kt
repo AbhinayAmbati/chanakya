@@ -9,6 +9,7 @@ import com.chanakya.core.data.db.dao.UserRuleDao
 import com.chanakya.core.data.db.entity.AppMetaEntity
 import com.chanakya.core.data.db.entity.BlockedEventEntity
 import com.chanakya.core.data.db.entity.CustomBlocklistEntity
+import com.chanakya.core.data.db.entity.DailyAggregateEntity
 import com.chanakya.core.data.db.entity.UserRuleEntity
 
 /**
@@ -21,8 +22,9 @@ import com.chanakya.core.data.db.entity.UserRuleEntity
         AppMetaEntity::class,
         UserRuleEntity::class,
         CustomBlocklistEntity::class,
+        DailyAggregateEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class ChanakyaDatabase : RoomDatabase() {

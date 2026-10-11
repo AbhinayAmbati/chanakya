@@ -31,3 +31,17 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         )
     }
 }
+
+/** Adds the `daily_aggregates` table used to retain lifetime totals after pruning. */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `daily_aggregates` (" +
+                "`dayStart` INTEGER NOT NULL, " +
+                "`packageName` TEXT NOT NULL, " +
+                "`networkId` TEXT NOT NULL, " +
+                "`blockedCount` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`dayStart`, `packageName`, `networkId`))",
+        )
+    }
+}

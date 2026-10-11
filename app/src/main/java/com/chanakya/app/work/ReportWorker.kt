@@ -8,10 +8,13 @@ import com.chanakya.core.data.repository.ReportRepository
 import java.util.concurrent.TimeUnit
 
 /**
- * Computes the last 24 hours of protection activity and posts it as a notification.
+ * Runs the daily maintenance pass and posts the protection summary.
  *
- * All work is local: the summary is derived from the on-device database and nothing is
- * uploaded anywhere.
+ * Maintenance first: blocked events older than the retention window are rolled into the
+ * daily aggregates and then pruned, so the raw table stays bounded while lifetime totals
+ * remain accurate. The summary is computed afterwards.
+ *
+ * All work is local; nothing is uploaded anywhere.
  */
 class ReportWorker(
     appContext: Context,
@@ -21,19 +24,32 @@ class ReportWorker(
     override suspend fun doWork(): Result {
         return try {
             val database = DatabaseProvider.get(applicationContext)
-            val reports = ReportRepository(database.blockedEventDao())
+            val eventDao = database.blockedEventDao()
 
+            val boundary = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(RETENTION_DAYS)
+            eventDao.rollUpOldEvents(boundary)
+            eventDao.pruneBefore(boundary)
+
+            val reports = ReportRepository(eventDao)
             val since = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1)
             val blockedCount = reports.blockedSince(since)
             val appCount = reports.appsSince(since)
             val topPackage = reports.topAppSince(since)
             val topLabel = topPackage?.let { database.appMetaDao().find(it)?.label } ?: topPackage
 
-            ChanakyaNotifications(applicationContext).showReport(blockedCount, appCount, topLabel)
+            // Only notify when there is something to report.
+            if (blockedCount > 0) {
+                ChanakyaNotifications(applicationContext).showReport(blockedCount, appCount, topLabel)
+            }
             Result.success()
         } catch (exception: Exception) {
             // A transient failure should be retried rather than silently dropped.
             Result.retry()
         }
+    }
+
+    private companion object {
+        /** Raw events older than this many days are rolled up and pruned. */
+        const val RETENTION_DAYS = 30L
     }
 }
