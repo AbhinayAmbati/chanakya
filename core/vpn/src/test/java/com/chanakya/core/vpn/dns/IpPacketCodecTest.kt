@@ -33,10 +33,8 @@ class IpPacketCodecTest {
 
     @Test
     fun `builds a reply with reversed addresses and ports`() {
-        val original = IpPacketCodec.parse(
-            buildIpv4UdpPacket(byteArrayOf(9), sourcePort = 40000, destinationPort = 53),
-            32,
-        )!!
+        val originalPacket = buildIpv4UdpPacket(byteArrayOf(9), sourcePort = 40000, destinationPort = 53)
+        val original = IpPacketCodec.parse(originalPacket, originalPacket.size)!!
 
         val reply = IpPacketCodec.buildReply(original, byteArrayOf(7, 7))
         val parsedReply = IpPacketCodec.parse(reply, reply.size)!!

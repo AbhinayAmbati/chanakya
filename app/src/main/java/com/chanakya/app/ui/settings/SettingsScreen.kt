@@ -51,18 +51,18 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        androidx.compose.foundation.lazy.item {
+        item {
             ChanakyaScreenTitle(
                 title = stringResource(R.string.settings_title),
                 subtitle = stringResource(R.string.settings_subtitle),
             )
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             SectionHeader(title = stringResource(R.string.settings_protection))
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             ChanakyaCard {
                 SettingToggle(
                     title = stringResource(R.string.settings_auto_start),
@@ -80,11 +80,11 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             SectionHeader(title = stringResource(R.string.settings_ad_id))
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             ChanakyaCard {
                 Text(
                     text = stringResource(R.string.settings_ad_id_desc),
@@ -99,11 +99,11 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             SectionHeader(title = stringResource(R.string.settings_about))
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             ChanakyaCard {
                 Text(
                     text = stringResource(R.string.settings_about_desc, BuildConfig.VERSION_NAME),
@@ -113,7 +113,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             Spacer(Modifier.padding(bottom = 16.dp))
         }
     }

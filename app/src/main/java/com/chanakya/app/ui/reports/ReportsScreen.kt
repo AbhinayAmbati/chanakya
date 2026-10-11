@@ -38,14 +38,14 @@ fun ReportsScreen(modifier: Modifier = Modifier) {
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        androidx.compose.foundation.lazy.item {
+        item {
             ChanakyaScreenTitle(
                 title = stringResource(R.string.reports_title),
                 subtitle = stringResource(R.string.reports_subtitle),
             )
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 androidx.compose.material3.Text(
                     text = stringResource(R.string.reports_today),
@@ -67,7 +67,7 @@ fun ReportsScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 androidx.compose.material3.Text(
                     text = stringResource(R.string.reports_all_time),
@@ -89,7 +89,7 @@ fun ReportsScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        androidx.compose.foundation.lazy.item {
+        item {
             androidx.compose.foundation.layout.Spacer(Modifier.padding(bottom = 16.dp))
         }
     }

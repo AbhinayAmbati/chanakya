@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.item
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -107,7 +106,8 @@ fun HomeScreen(
             }
         }
 
-        if (state.summary.topNetwork != null) {
+        val topNetwork = state.summary.topNetwork
+        if (topNetwork != null) {
             item {
                 ChanakyaCard {
                     Text(
@@ -117,7 +117,7 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = state.summary.topNetwork.name,
+                        text = topNetwork.name,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )

@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 /**
  * The light colour scheme. This is the primary scheme for Chanakya, built around a
@@ -39,30 +40,24 @@ private val LightColors = lightColorScheme(
 private val DarkColors = darkColorScheme(
     primary = BrightMint,
     onPrimary = InkSlate,
-    primaryContainer = Color0F2A24,
+    primaryContainer = Color(0xFF0F2A24),
     onPrimaryContainer = MintGlow,
     secondary = SkyBlue,
     onSecondary = InkSlate,
-    secondaryContainer = Color152635,
+    secondaryContainer = Color(0xFF152635),
     onSecondaryContainer = Ice,
     tertiary = CategoryAnalytics,
     onTertiary = White,
-    background = Color0B1218,
+    background = Color(0xFF0B1218),
     onBackground = Ice,
-    surface = Color121B24,
+    surface = Color(0xFF121B24),
     onSurface = Ice,
-    surfaceVariant = Color121B24,
+    surfaceVariant = Color(0xFF121B24),
     onSurfaceVariant = SoftSlate,
     outline = SoftSlate,
     error = StatusHighActivity,
     onError = White,
 )
-
-// Dark-scheme surface tones, kept private to this file.
-private val Color0B1218 = androidx.compose.ui.graphics.Color(0xFF0B1218)
-private val Color121B24 = androidx.compose.ui.graphics.Color(0xFF121B24)
-private val Color152635 = androidx.compose.ui.graphics.Color(0xFF152635)
-private val Color0F2A24 = androidx.compose.ui.graphics.Color(0xFF0F2A24)
 
 /**
  * The root theme wrapper. Wrap the whole app (and every preview) in this so that
