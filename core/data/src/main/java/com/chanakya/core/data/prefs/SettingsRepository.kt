@@ -5,11 +5,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import com.chanakya.core.data.model.ThemeMode
 
 /** The single DataStore instance for user preferences. */
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "chanakya_settings")
@@ -28,6 +30,7 @@ class SettingsRepository(private val context: Context) {
         val BLOCKLISTS_INITIALISED = booleanPreferencesKey("blocklists_initialised")
         val AD_ID_REMINDER = booleanPreferencesKey("ad_id_reminder")
         val NOTIFICATION_PROMPT_SHOWN = booleanPreferencesKey("notification_prompt_shown")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     /** Whether the local VPN should be running. */
@@ -53,6 +56,15 @@ class SettingsRepository(private val context: Context) {
     /** Whether the one-time notification-permission prompt has already been shown. */
     val notificationPromptShown: Flow<Boolean> =
         context.settingsDataStore.data.map { it[Keys.NOTIFICATION_PROMPT_SHOWN] ?: false }
+
+    /** Which colour scheme the user has chosen. */
+    val themeMode: Flow<ThemeMode> = context.settingsDataStore.data.map { preferences ->
+        when (preferences[Keys.THEME_MODE]) {
+            "light" -> ThemeMode.LIGHT
+            "dark" -> ThemeMode.DARK
+            else -> ThemeMode.SYSTEM
+        }
+    }
 
     /** Enable or disable protection. */
     suspend fun setProtectionEnabled(enabled: Boolean) {
@@ -100,5 +112,10 @@ class SettingsRepository(private val context: Context) {
     /** Record that the notification-permission prompt has been shown. */
     suspend fun setNotificationPromptShown() {
         context.settingsDataStore.edit { it[Keys.NOTIFICATION_PROMPT_SHOWN] = true }
+    }
+
+    /** Persist the chosen colour scheme. */
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.settingsDataStore.edit { it[Keys.THEME_MODE] = mode.name.lowercase() }
     }
 }

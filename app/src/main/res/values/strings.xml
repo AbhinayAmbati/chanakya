@@ -59,6 +59,22 @@
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_subtitle">Control how Chanakya protects you</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_diagnostics">Diagnostics</string>
+    <string name="diag_protection">Protection</string>
+    <string name="diag_active">Active</string>
+    <string name="diag_starting">Starting</string>
+    <string name="diag_stopped">Stopped</string>
+    <string name="diag_error">Error</string>
+    <string name="diag_domains">Domains loaded</string>
+    <string name="diag_ip_ranges">IP ranges loaded</string>
+    <string name="diag_dns_servers">Resolvers routed</string>
+    <string name="diag_session_events">Queries seen (session)</string>
+    <string name="diag_session_blocked">Blocked (session)</string>
+    <string name="diag_total_blocked">Blocked (all time)</string>
     <string name="settings_protection">Protection</string>
     <string name="settings_auto_start">Start on boot</string>
     <string name="settings_auto_start_desc">Restart protection automatically after a reboot.</string>

@@ -55,6 +55,7 @@ object AppViewModelProvider {
                 settingsRepository = container.settingsRepository,
                 blocklistRepository = container.blocklistRepository,
                 userRuleRepository = container.userRuleRepository,
+                trackerRepository = container.trackerRepository,
                 reportScheduler = container.reportScheduler,
             )
         }

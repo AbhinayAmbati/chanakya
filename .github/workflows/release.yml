@@ -73,6 +73,12 @@ jobs:
       - name: Run release unit tests
         run: ./gradlew testReleaseUnitTest --stacktrace
 
+      - name: Rename the APK for release
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" chanakya.apk
+          ls -la chanakya.apk
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -80,4 +86,4 @@ jobs:
           name: Chanakya v${{ inputs.version }}
           prerelease: ${{ inputs.prerelease }}
           generate_release_notes: true
-          files: app/build/outputs/apk/release/*.apk
+          files: chanakya.apk

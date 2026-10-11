@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +37,9 @@ import com.chanakya.app.di.LocalAppContainer
 import com.chanakya.app.ui.AppViewModelProvider
 import com.chanakya.core.data.model.BlocklistInfo
 import com.chanakya.core.data.model.RuleType
+import com.chanakya.core.data.model.ThemeMode
 import com.chanakya.core.data.model.UserRule
+import com.chanakya.core.vpn.model.VpnState
 import com.chanakya.core.designsystem.component.ChanakyaCard
 import com.chanakya.core.designsystem.component.ChanakyaScreenTitle
 import com.chanakya.core.designsystem.component.ChanakyaSecondaryButton
@@ -58,6 +61,10 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     val adIdReminder by viewModel.adIdReminder.collectAsStateWithLifecycle()
     val blocklists by viewModel.blocklists.collectAsStateWithLifecycle()
     val userRules by viewModel.userRules.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
+    val diagnostics by viewModel.diagnostics.collectAsStateWithLifecycle()
+    val blockedTotal by viewModel.blockedTotal.collectAsStateWithLifecycle()
 
     // Lets the user pick a hosts/domain file to import.
     val importLauncher = rememberLauncherForActivityResult(
@@ -75,6 +82,24 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 title = stringResource(R.string.settings_title),
                 subtitle = stringResource(R.string.settings_subtitle),
             )
+        }
+
+        item { SectionHeader(title = stringResource(R.string.settings_appearance)) }
+        item {
+            ChanakyaCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ThemeMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = themeMode == mode,
+                            onClick = { viewModel.setThemeMode(mode) },
+                            label = { Text(stringResource(mode.labelRes())) },
+                        )
+                    }
+                }
+            }
         }
 
         item { SectionHeader(title = stringResource(R.string.settings_protection)) }
@@ -170,6 +195,35 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        item { SectionHeader(title = stringResource(R.string.settings_diagnostics)) }
+        item {
+            ChanakyaCard {
+                DiagnosticRow(
+                    label = stringResource(R.string.diag_protection),
+                    value = stringResource(
+                        when (vpnState) {
+                            is VpnState.Active -> R.string.diag_active
+                            is VpnState.Error -> R.string.diag_error
+                            VpnState.Starting -> R.string.diag_starting
+                            VpnState.Stopped -> R.string.diag_stopped
+                        },
+                    ),
+                )
+                DiagnosticRow(stringResource(R.string.diag_domains), diagnostics.domainsLoaded.toString())
+                DiagnosticRow(stringResource(R.string.diag_ip_ranges), diagnostics.ipRangesLoaded.toString())
+                DiagnosticRow(stringResource(R.string.diag_dns_servers), diagnostics.routedDnsServers.toString())
+                DiagnosticRow(
+                    stringResource(R.string.diag_session_events),
+                    diagnostics.observationsThisSession.toString(),
+                )
+                DiagnosticRow(
+                    stringResource(R.string.diag_session_blocked),
+                    diagnostics.blockedThisSession.toString(),
+                )
+                DiagnosticRow(stringResource(R.string.diag_total_blocked), blockedTotal.toString())
             }
         }
 
@@ -278,6 +332,36 @@ private fun RuleRow(
             }
         }
     }
+}
+
+/** A label/value line in the diagnostics card. */
+@Composable
+private fun DiagnosticRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            style = MonoTextStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/** The label resource for a theme mode. */
+private fun ThemeMode.labelRes(): Int = when (this) {
+    ThemeMode.SYSTEM -> R.string.theme_system
+    ThemeMode.LIGHT -> R.string.theme_light
+    ThemeMode.DARK -> R.string.theme_dark
 }
 
 /**

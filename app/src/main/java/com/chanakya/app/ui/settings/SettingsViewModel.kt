@@ -5,12 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chanakya.app.work.ReportScheduler
 import com.chanakya.core.data.model.BlocklistInfo
+import com.chanakya.core.data.model.ThemeMode
 import com.chanakya.core.data.model.UserRule
 import com.chanakya.core.data.prefs.SettingsRepository
 import com.chanakya.core.data.repository.BlocklistRepository
+import com.chanakya.core.data.repository.TrackerRepository
 import com.chanakya.core.data.repository.UserRuleRepository
+import com.chanakya.core.vpn.model.VpnDiagnostics
+import com.chanakya.core.vpn.model.VpnState
+import com.chanakya.core.vpn.model.VpnStatus
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,6 +28,7 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val blocklistRepository: BlocklistRepository,
     private val userRuleRepository: UserRuleRepository,
+    private val trackerRepository: TrackerRepository,
     private val reportScheduler: ReportScheduler,
 ) : ViewModel() {
 
@@ -44,6 +51,21 @@ class SettingsViewModel(
     /** The user's allow/block rules. */
     val userRules: StateFlow<List<UserRule>> = userRuleRepository.observeRules()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Which colour scheme the user has chosen. */
+    val themeMode: StateFlow<ThemeMode> = settingsRepository.themeMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThemeMode.SYSTEM)
+
+    /** The current tunnel state, for the diagnostics view. */
+    val vpnState: StateFlow<VpnState> = VpnStatus.state
+
+    /** What the engine is doing, for the diagnostics view. */
+    val diagnostics: StateFlow<VpnDiagnostics> = VpnStatus.diagnostics
+
+    /** Blocked queries of all time, for the diagnostics view. */
+    val blockedTotal: StateFlow<Int> = trackerRepository.observeProtectionSummary()
+        .map { it.blockedTotal }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
         // Make sure the default lists exist before the UI renders them.
@@ -81,6 +103,11 @@ class SettingsViewModel(
     /** Import a blocklist from a document the user picked. */
     fun importBlocklist(uri: Uri) {
         viewModelScope.launch { blocklistRepository.importFromUri(uri) }
+    }
+
+    /** Persist the chosen colour scheme. */
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { settingsRepository.setThemeMode(mode) }
     }
 
     /** Enable or disable a user rule without deleting it. */
