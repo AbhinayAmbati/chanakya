@@ -85,8 +85,7 @@ class RoomReportsRepository(
 
         return (0 until SERIES_DAYS).map {
             val key = DAY_KEY_FORMAT.format(calendar.time)
-            val label = calendar.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.SHORT)
-                ?: key
+            val label = DAY_LABEL_FORMAT.format(calendar.time)
             val count = counts[key] ?: 0
             calendar.add(Calendar.DAY_OF_YEAR, 1)
             DayCount(label = label, count = count)
@@ -164,5 +163,8 @@ class RoomReportsRepository(
 
         /** Matches the format the daily-counts query emits. */
         val DAY_KEY_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+        /** The short weekday shown under each bar. */
+        val DAY_LABEL_FORMAT = SimpleDateFormat("EEE", Locale.US)
     }
 }
