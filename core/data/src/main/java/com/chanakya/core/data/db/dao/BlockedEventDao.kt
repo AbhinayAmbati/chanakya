@@ -93,19 +93,6 @@ interface BlockedEventDao {
     )
     fun observeNetworkCountsSince(since: Long): Flow<List<NetworkCountRow>>
 
-    /**
-     * Blocked counts per local day since the given time, for the trend chart.
-     *
-     * Only raw events are read: a seven-day window sits well inside the retention
-     * period, so nothing in it has been rolled up into the aggregate table yet.
-     */
-    @Query(
-        "SELECT strftime('%Y-%m-%d', timestamp / 1000, 'unixepoch', 'localtime') AS day, " +
-            "COUNT(*) AS count FROM blocked_events " +
-            "WHERE blocked = 1 AND timestamp >= :since GROUP BY day ORDER BY day",
-    )
-    fun observeDailyCountsSince(since: Long): Flow<List<DailyCountRow>>
-
     /** The busiest apps since the given time. */
     @Query(
         "SELECT packageName, SUM(entryCount) AS count FROM (" +

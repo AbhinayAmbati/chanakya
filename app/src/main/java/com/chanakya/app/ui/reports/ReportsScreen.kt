@@ -104,10 +104,10 @@ private fun ChartsCard(breakdown: ReportBreakdown) {
             return@ChanakyaCard
         }
 
-        if (breakdown.daily.any { it.count > 0 }) {
-            Spacer(Modifier.height(16.dp))
-            BarChart(bars = breakdown.daily.map { ChartBar(it.label, it.count) })
-        }
+        // Always drawn once there is activity, even if a given day was quiet: a chart
+        // that vanishes is indistinguishable from one that is broken.
+        Spacer(Modifier.height(16.dp))
+        BarChart(bars = breakdown.daily.map { ChartBar(it.label, it.count) })
 
         if (breakdown.byCategory.isNotEmpty()) {
             Spacer(Modifier.height(24.dp))

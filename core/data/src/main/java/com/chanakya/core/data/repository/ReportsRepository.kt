@@ -4,7 +4,7 @@ import com.chanakya.core.data.catalog.TrackerCatalog
 import com.chanakya.core.data.db.dao.AppMetaDao
 import com.chanakya.core.data.db.dao.BlockedEventDao
 import com.chanakya.core.data.db.NetworkCountRow
-import com.chanakya.core.data.db.dao.DailyCountRow
+import com.chanakya.core.data.db.entity.BlockedEventEntity
 import com.chanakya.core.data.db.entity.toModel
 import com.chanakya.core.data.model.AppCount
 import com.chanakya.core.data.model.AppInfo
@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -61,34 +62,41 @@ class RoomReportsRepository(
     override fun observeAllTime(): Flow<ReportWindow> = window(0L)
 
     override fun observeBreakdown(): Flow<ReportBreakdown> = combine(
-        eventDao.observeDailyCountsSince(startOfWeek()),
+        eventDao.observeAll(),
         eventDao.observeNetworkCountsSince(startOfWeek()),
-    ) { daily, networks ->
+    ) { events, networks ->
         ReportBreakdown(
-            daily = buildDailySeries(daily),
+            daily = events.buildDailySeries(),
             byCategory = buildCategorySplit(networks),
         )
     }
 
     /**
-     * Turn the sparse day rows into a fixed seven-day series.
+     * Build the seven-day series in memory from the raw events.
      *
-     * A day with no activity has no row at all, so the series is walked from the date
-     * rather than from the result - otherwise the bars would slide left on quiet days.
+     * Deliberately not done in SQL. Matching SQLite's `strftime(..., 'localtime')` output
+     * against a date format built in Kotlin is a timezone-shaped trap: any disagreement
+     * about the day boundary produces zero matches, and the chart silently renders empty.
+     * Bucketing here means one clock decides both the window and the events in it.
+     *
+     * A day with no activity still gets an entry, so the bars cannot slide left on a
+     * quiet day.
      */
-    private fun buildDailySeries(rows: List<DailyCountRow>): List<DayCount> {
-        val counts = rows.associate { it.day to it.count }
-
+    private fun List<BlockedEventEntity>.buildDailySeries(): List<DayCount> {
         val calendar = Calendar.getInstance()
         calendar.timeInMillis = startOfToday()
         calendar.add(Calendar.DAY_OF_YEAR, -(SERIES_DAYS - 1))
 
         return (0 until SERIES_DAYS).map {
-            val key = DAY_KEY_FORMAT.format(calendar.time)
-            val label = DAY_LABEL_FORMAT.format(calendar.time)
-            val count = counts[key] ?: 0
+            val dayStart = calendar.timeInMillis
+            val label = DAY_LABEL_FORMAT.format(Date(dayStart))
             calendar.add(Calendar.DAY_OF_YEAR, 1)
-            DayCount(label = label, count = count)
+            val dayEnd = calendar.timeInMillis
+
+            DayCount(
+                label = label,
+                count = count { it.blocked && it.timestamp >= dayStart && it.timestamp < dayEnd },
+            )
         }
     }
 
@@ -160,9 +168,6 @@ class RoomReportsRepository(
 
         /** Days shown in the trend chart, including today. */
         const val SERIES_DAYS = 7
-
-        /** Matches the format the daily-counts query emits. */
-        val DAY_KEY_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
         /** The short weekday shown under each bar. */
         val DAY_LABEL_FORMAT = SimpleDateFormat("EEE", Locale.US)

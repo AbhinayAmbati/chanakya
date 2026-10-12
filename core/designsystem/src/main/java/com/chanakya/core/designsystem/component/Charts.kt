@@ -179,6 +179,8 @@ fun BarChart(
     val peak = (bars.maxOfOrNull { it.value } ?: 0).coerceAtLeast(1)
 
     Column(modifier = modifier.fillMaxWidth()) {
+        val shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -193,11 +195,24 @@ fun BarChart(
                         .fillMaxHeight(),
                     contentAlignment = Alignment.BottomCenter,
                 ) {
+                    // A faint track, so a quiet day still reads as a column rather than
+                    // a gap.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(trackColor, bar.value.toFloat() / peak)
-                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)),
+                            .fillMaxHeight(TRACK_FRACTION)
+                            .clip(shape)
+                            .background(trackColor),
+                    )
+                    // The value itself, in the bar colour. This is the box that used to
+                    // be missing: the bars were being drawn in the track colour, which on
+                    // a white card is very nearly invisible.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight((bar.value.toFloat() / peak).coerceIn(0f, 1f))
+                            .clip(shape)
+                            .background(barColor),
                     )
                 }
             }
@@ -223,17 +238,5 @@ fun BarChart(
     }
 }
 
-/**
- * A bar's height, never quite zero.
- *
- * A day with nothing blocked still gets a sliver, so the column is visibly present and
- * the chart does not look like it is missing a bar.
- */
-private fun Modifier.fillMaxHeight(color: Color, fraction: Float): Modifier {
-    val safe = fraction.coerceIn(MIN_BAR_FRACTION, 1f)
-    return this
-        .fillMaxHeight(safe)
-        .background(color)
-}
-
-private const val MIN_BAR_FRACTION = 0.02f
+/** How tall the faint track behind each bar is, as a fraction of the chart height. */
+private const val TRACK_FRACTION = 0.04f
