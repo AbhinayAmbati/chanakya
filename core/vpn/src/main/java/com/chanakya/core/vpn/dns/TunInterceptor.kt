@@ -62,6 +62,13 @@ class TunInterceptor(
     /** Serialises writes to the tunnel, which the relay workers share with the loop. */
     private val writeLock = Any()
 
+    /**
+     * The scope the read loop runs on. Relayed lookups hop onto it so a slow upstream
+     * never holds up the loop.
+     */
+    @Volatile
+    private var workerScope: CoroutineScope? = null
+
     /** Write one finished packet into the tunnel. */
     fun emitPacket(packet: ByteArray) {
         synchronized(writeLock) {
@@ -74,19 +81,22 @@ class TunInterceptor(
      *
      * @return the [Job] so the caller can cancel it when the tunnel stops.
      */
-    fun start(scope: CoroutineScope): Job = scope.launch {
-        val buffer = ByteArray(MAX_PACKET_SIZE)
-        while (isActive) {
-            val length = try {
-                input.read(buffer)
-            } catch (exception: IOException) {
-                break // The interface was closed; stop the loop.
-            }
-            if (length <= 0) continue
-            try {
-                handlePacket(buffer, length)
-            } catch (exception: Exception) {
-                // A single malformed packet must never take down the tunnel.
+    fun start(scope: CoroutineScope): Job {
+        workerScope = scope
+        return scope.launch {
+            val buffer = ByteArray(MAX_PACKET_SIZE)
+            while (isActive) {
+                val length = try {
+                    input.read(buffer)
+                } catch (exception: IOException) {
+                    break // The interface was closed; stop the loop.
+                }
+                if (length <= 0) continue
+                try {
+                    handlePacket(buffer, length)
+                } catch (exception: Exception) {
+                    // A single malformed packet must never take down the tunnel.
+                }
             }
         }
     }
@@ -167,23 +177,45 @@ class TunInterceptor(
             ),
         )
 
-        val forwardResult = if (blocked) null else forwarder.forward(datagram.payload)
-
-        val responsePayload = if (blocked) {
-            // Answer locally: the query never reaches the network.
-            DnsMessage.buildBlockedResponse(datagram.payload, question)
-        } else {
-            // Forward upstream and relay the genuine answer. If relaying fails we still
-            // answer - with SERVFAIL - rather than dropping the packet, so the app is
-            // never left hanging with no reply at all.
-            forwardResult ?: DnsMessage.buildServFailResponse(datagram.payload, question)
+        if (blocked) {
+            // Answer locally: the query never reaches the network, and nothing blocks.
+            emitPacket(
+                IpPacketCodec.buildReply(
+                    datagram,
+                    DnsMessage.buildBlockedResponse(datagram.payload, question),
+                ),
+            )
+            return
         }
 
-        emitPacket(IpPacketCodec.buildReply(datagram, responsePayload))
+        // Relaying waits on the network, so it must not happen on the packet loop. Doing
+        // it inline meant every lookup queued behind the previous one, and a lookup whose
+        // upstream timed out held the loop for up to six seconds - long enough that apps
+        // firing dozens of lookups at once, like a shopping app loading a product grid,
+        // timed out waiting. Each query is relayed on its own coroutine instead.
+        val scope = workerScope
+        if (scope == null) {
+            relay(datagram, question)
+            return
+        }
+        scope.launch { relay(datagram, question) }
+    }
 
-        // Report the outcome last: the fail-open path tears the tunnel down, so it must
-        // not run in the middle of writing a reply.
-        if (!blocked) onRelayResult(forwardResult != null)
+    /** Relay one allowed query upstream and write the answer back into the tunnel. */
+    private suspend fun relay(
+        datagram: IpPacketCodec.UdpDatagram,
+        question: DnsMessage.Question,
+    ) {
+        val result = forwarder.forward(datagram.payload)
+        emitPacket(
+            IpPacketCodec.buildReply(
+                datagram,
+                result ?: DnsMessage.buildServFailResponse(datagram.payload, question),
+            ),
+        )
+        // Reported last: the fail-open path tears the tunnel down, so it must not run in
+        // the middle of writing a reply.
+        onRelayResult(result != null)
     }
 
     /** Log and drop a packet destined for a blocked IP range. */

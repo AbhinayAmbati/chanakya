@@ -63,7 +63,6 @@ fun SettingsScreen(
 
     val autoStart by viewModel.autoStartOnBoot.collectAsStateWithLifecycle()
     val blockIp by viewModel.blockIpLevel.collectAsStateWithLifecycle()
-    val fullTunnel by viewModel.fullTunnel.collectAsStateWithLifecycle()
     val adIdReminder by viewModel.adIdReminder.collectAsStateWithLifecycle()
     val blocklists by viewModel.blocklists.collectAsStateWithLifecycle()
     val userRules by viewModel.userRules.collectAsStateWithLifecycle()
@@ -123,13 +122,6 @@ fun SettingsScreen(
                     description = stringResource(R.string.settings_ip_blocking_desc),
                     checked = blockIp,
                     onCheckedChange = viewModel::setBlockIpLevel,
-                )
-                Spacer(Modifier.height(16.dp))
-                SettingToggle(
-                    title = stringResource(R.string.settings_full_tunnel),
-                    description = stringResource(R.string.settings_full_tunnel_desc),
-                    checked = fullTunnel,
-                    onCheckedChange = viewModel::setFullTunnel,
                 )
             }
         }

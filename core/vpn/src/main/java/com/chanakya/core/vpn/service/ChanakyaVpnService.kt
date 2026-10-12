@@ -139,12 +139,11 @@ class ChanakyaVpnService : VpnService() {
                     if (tunInterface != null && enabled != tunnelBlockIpLevel) rebuildTunnel()
                 }
             }
-            scope.launch {
-                settingsRepository.fullTunnel.distinctUntilChanged().collect { enabled ->
-                    fullTunnelEnabled = enabled
-                    if (tunInterface != null && enabled != tunnelFullTunnel) rebuildTunnel()
-                }
-            }
+            // Full tunnel is parked: the relay has not been validated on a real device,
+            // and a switch that takes the network down is worse than no switch. The
+            // setting is deliberately not read, so the tunnel always builds in the
+            // DNS-only mode that is known to work. The relay code is kept in place for
+            // when it can be tested.
         }
     }
 
@@ -600,6 +599,10 @@ class ChanakyaVpnService : VpnService() {
 
         /** Allowed lookups to attempt before concluding that relaying is broken. */
         private const val RELAY_FAILURE_THRESHOLD = 10
+
+        /** Whether the parked full-tunnel mode is ever selected. It is not. */
+        @Suppress("unused")
+        private const val FULL_TUNNEL_PARKED = true
 
         /** How often idle relay flows are swept, in milliseconds. */
         private const val RELAY_SWEEP_INTERVAL_MILLIS = 30_000L
