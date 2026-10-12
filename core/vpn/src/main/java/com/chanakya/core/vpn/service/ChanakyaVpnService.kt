@@ -257,13 +257,16 @@ class ChanakyaVpnService : VpnService() {
                 blockedThisSession = sessionBlocked,
             )
         }
-        // Keep the ongoing notification's count in step with the session. It was built
-        // once when the tunnel came up - at zero - and never refreshed, so it always
-        // read 0 even while the app showed a real total.
-        notificationManager?.notify(
-            VpnNotification.NOTIFICATION_ID,
-            notification.build(sessionBlocked),
-        )
+        // Keep the ongoing notification's count in step with the session - but only
+        // while the tunnel is actually up. Without that guard, shutting protection down
+        // ran through here on the way out and posted the notification again, leaving a
+        // stray "protection active" notification behind after the user switched it off.
+        if (tunInterface != null) {
+            notificationManager?.notify(
+                VpnNotification.NOTIFICATION_ID,
+                notification.build(sessionBlocked),
+            )
+        }
     }
 
     private fun rebuildTunnel() {
@@ -399,6 +402,9 @@ class ChanakyaVpnService : VpnService() {
         publishDiagnostics()
         VpnStatus.update(VpnState.Stopped)
         stopForeground(STOP_FOREGROUND_REMOVE)
+        // Belt and braces: the ongoing notification is ours to remove, so remove it
+        // rather than relying on the foreground detach alone.
+        notificationManager?.cancel(VpnNotification.NOTIFICATION_ID)
         stopSelf()
     }
 
@@ -429,13 +435,23 @@ class ChanakyaVpnService : VpnService() {
             .addAddress(VPN_V6_ADDRESS, VPN_V6_PREFIX_LENGTH)
 
         if (tunnelFullTunnel) {
-            // Route everything. This is what makes Android's Private DNS safe: its
-            // DNS-over-TLS probe is carried by the relay like any other connection, so
-            // the platform keeps a resolver it can use. Nothing is advertised, because
-            // every lookup already passes through us.
+            // Route everything, and advertise the device's *real* resolvers as the
+            // tunnel's DNS servers.
+            //
+            // Advertising matters. With a default route and no resolver declared, the
+            // platform has no DNS server for its default network and resolution fails
+            // outright - which is why switching full tunnel on made the app look dead.
+            // Advertising a real resolver also lets Android's Private DNS work, because
+            // the platform's DNS-over-TLS probe then reaches an address that can answer
+            // it, carried by the relay like any other connection.
             builder.addRoute("0.0.0.0", 0)
             builder.addRoute("::", 0)
             routedDnsServers = 0
+            upstreamServers.forEach { address ->
+                val host = address.hostAddress?.substringBefore('%') ?: return@forEach
+                builder.addDnsServer(host)
+                routedDnsServers += 1
+            }
         } else {
             // Advertise our own resolvers and route them. Advertising is what makes
             // capture work at all: the platform binds DNS to the network it resolves on,
