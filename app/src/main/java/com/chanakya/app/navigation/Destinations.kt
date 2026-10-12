@@ -30,11 +30,20 @@ object Destinations {
     /** The per-app detail screen. */
     const val APP_DETAIL = "app/{packageName}"
 
+    /** The cross-app detail screen for one tracker network. */
+    const val NETWORK_DETAIL = "network/{networkId}"
+
     /** The argument key used by [APP_DETAIL]. */
     const val ARG_PACKAGE_NAME = "packageName"
 
+    /** The argument key used by [NETWORK_DETAIL]. */
+    const val ARG_NETWORK_ID = "networkId"
+
     /** Build the route for a specific app's detail screen. */
     fun appDetail(packageName: String): String = "app/$packageName"
+
+    /** Build the route for a specific network's detail screen. */
+    fun networkDetail(networkId: String): String = "network/$networkId"
 
     /** Routes that show the bottom navigation bar. */
     val topLevel = setOf(HOME, APPS, REPORTS, SETTINGS)

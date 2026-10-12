@@ -133,6 +133,15 @@
     <string name="settings_about_open">Open</string>
     <string name="settings_terms">Terms of use</string>
     <string name="settings_privacy">Privacy policy</string>
+    <string name="network_detail_unknown">This network is no longer in the catalogue.</string>
+    <string name="network_detail_apps">Apps</string>
+    <string name="network_detail_domains">Domains</string>
+    <string name="network_detail_apps_heading">Apps that contacted it</string>
+    <string name="domain_detail_unknown">This domain has not been seen yet.</string>
+    <string name="domain_first_seen">First seen</string>
+    <string name="domain_last_seen_label">Last seen</string>
+    <string name="domain_last_seen">Last seen %1$s</string>
+    <string name="domain_asked_by">Asked for by</string>
     <string name="reports_charts_title">Last 7 days at a glance</string>
     <string name="reports_by_category">Blocked by category</string>
     <string name="settings_full_tunnel">Full tunnel</string>

@@ -3,7 +3,9 @@ package com.chanakya.core.data.repository
 import com.chanakya.core.data.model.AppInfo
 import com.chanakya.core.data.model.AppUsageSummary
 import com.chanakya.core.data.model.BlockedEvent
+import com.chanakya.core.data.model.DomainDetail
 import com.chanakya.core.data.model.NetworkCount
+import com.chanakya.core.data.model.NetworkDetail
 import com.chanakya.core.data.model.ProtectionSummary
 import kotlinx.coroutines.flow.Flow
 
@@ -24,6 +26,21 @@ interface TrackerRepository {
 
     /** The most recent raw events, for live views. */
     fun observeRecentEvents(limit: Int = 100): Flow<List<BlockedEvent>>
+
+    /**
+     * Everything known about one tracker network, across every app.
+     *
+     * Null when the catalogue does not know the id, so the caller can show nothing
+     * rather than an empty shell.
+     */
+    fun observeNetworkDetail(networkId: String): Flow<NetworkDetail?>
+
+    /**
+     * Everything known about one domain, across every app.
+     *
+     * Null when the domain has never been seen.
+     */
+    fun observeDomainDetail(domain: String): Flow<DomainDetail?>
 }
 
 /**

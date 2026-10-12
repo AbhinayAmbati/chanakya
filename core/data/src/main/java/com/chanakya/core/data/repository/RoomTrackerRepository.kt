@@ -4,10 +4,15 @@ import com.chanakya.core.data.catalog.TrackerCatalog
 import com.chanakya.core.data.db.dao.AppMetaDao
 import com.chanakya.core.data.db.dao.BlockedEventDao
 import com.chanakya.core.data.db.entity.toModel
+import com.chanakya.core.data.db.entity.BlockedEventEntity
+import com.chanakya.core.data.model.AppCount
 import com.chanakya.core.data.model.AppInfo
 import com.chanakya.core.data.model.AppUsageSummary
 import com.chanakya.core.data.model.BlockedEvent
+import com.chanakya.core.data.model.DomainDetail
+import com.chanakya.core.data.model.DomainSummary
 import com.chanakya.core.data.model.NetworkCount
+import com.chanakya.core.data.model.NetworkDetail
 import com.chanakya.core.data.model.ProtectionSummary
 import com.chanakya.core.data.model.TrackerNetwork
 import kotlinx.coroutines.flow.Flow
@@ -96,7 +101,86 @@ class RoomTrackerRepository(
     override fun observeRecentEvents(limit: Int): Flow<List<BlockedEvent>> =
         eventDao.observeRecent(limit).map { list -> list.map { it.toModel() } }
 
+    override fun observeNetworkDetail(networkId: String): Flow<NetworkDetail?> = combine(
+        eventDao.observeAll(),
+        appDao.observeAll(),
+    ) { events, apps ->
+        val network = TrackerCatalog.networks.firstOrNull { it.id == networkId }
+            ?: return@combine null
+
+        val matching = events.filter { it.networkOrNull()?.id == network.id }
+        val labels = apps.associate { it.packageName to it.toModel() }
+
+        NetworkDetail(
+            network = network,
+            blockedCount = matching.count { it.blocked },
+            appCount = matching.map { it.packageName }.distinct().size,
+            domains = matching.toDomainSummaries(),
+            apps = matching.toAppCounts(labels),
+        )
+    }
+
+    override fun observeDomainDetail(domain: String): Flow<DomainDetail?> = combine(
+        eventDao.observeAll(),
+        appDao.observeAll(),
+    ) { events, apps ->
+        val matching = events.filter { it.domain == domain }
+        if (matching.isEmpty()) return@combine null
+
+        DomainDetail(
+            domain = domain,
+            network = matching.first().networkOrNull(),
+            blockedCount = matching.count { it.blocked },
+            allowedCount = matching.count { !it.blocked },
+            firstSeen = matching.minOf { it.timestamp },
+            lastSeen = matching.maxOf { it.timestamp },
+            apps = matching.toAppCounts(apps.associate { it.packageName to it.toModel() }),
+        )
+    }
+
     // ---- Helpers ----------------------------------------------------------
+
+    /**
+     * The network an event belongs to.
+     *
+     * Prefers the id recorded with the event, and falls back to the catalogue's domain
+     * index - older rows predate the id being stored, and a domain is enough to place
+     * them.
+     */
+    private fun BlockedEventEntity.networkOrNull(): TrackerNetwork? =
+        networkId?.let { id -> TrackerCatalog.networks.firstOrNull { it.id == id } }
+            ?: TrackerCatalog.networkForDomain(domain)
+
+    /** Group events into per-domain summaries, busiest first. */
+    private fun List<BlockedEventEntity>.toDomainSummaries(): List<DomainSummary> =
+        groupBy { it.domain }
+            .map { (domain, domainEvents) ->
+                DomainSummary(
+                    domain = domain,
+                    count = domainEvents.size,
+                    blockedCount = domainEvents.count { it.blocked },
+                    firstSeen = domainEvents.minOf { it.timestamp },
+                    lastSeen = domainEvents.maxOf { it.timestamp },
+                )
+            }
+            .sortedByDescending { it.count }
+
+    /** Group events into per-app counts, busiest first, resolving labels where known. */
+    private fun List<BlockedEventEntity>.toAppCounts(
+        labels: Map<String, AppInfo>,
+    ): List<AppCount> = groupBy { it.packageName }
+        .map { (packageName, appEvents) ->
+            AppCount(
+                app = labels[packageName]
+                    ?: AppInfo(
+                        uid = appEvents.first().uid,
+                        packageName = packageName,
+                        label = packageName,
+                    ),
+                count = appEvents.size,
+            )
+        }
+        .sortedByDescending { it.count }
 
     /** Build a per-app summary from its raw events. */
     private fun List<com.chanakya.core.data.db.entity.BlockedEventEntity>.toSummary(

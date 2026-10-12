@@ -6,7 +6,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.chanakya.app.di.AppContainer
 import com.chanakya.app.ui.appdetail.AppDetailViewModel
 import com.chanakya.app.ui.apps.AppsViewModel
+import com.chanakya.app.ui.domain.DomainDetailViewModel
 import com.chanakya.app.ui.home.HomeViewModel
+import com.chanakya.app.ui.networkdetail.NetworkDetailViewModel
 import com.chanakya.app.ui.reports.ReportsViewModel
 import com.chanakya.app.ui.settings.SettingsViewModel
 
@@ -39,6 +41,27 @@ object AppViewModelProvider {
                 trackerRepository = container.trackerRepository,
                 userRuleRepository = container.userRuleRepository,
                 packageName = packageName,
+            )
+        }
+    }
+
+    /** Factory for [NetworkDetailViewModel]. */
+    fun networkDetail(container: AppContainer, networkId: String): ViewModelProvider.Factory = viewModelFactory {
+        initializer {
+            NetworkDetailViewModel(
+                trackerRepository = container.trackerRepository,
+                networkId = networkId,
+            )
+        }
+    }
+
+    /** Factory for [DomainDetailViewModel]. */
+    fun domainDetail(container: AppContainer, domain: String): ViewModelProvider.Factory = viewModelFactory {
+        initializer {
+            DomainDetailViewModel(
+                trackerRepository = container.trackerRepository,
+                userRuleRepository = container.userRuleRepository,
+                domain = domain,
             )
         }
     }

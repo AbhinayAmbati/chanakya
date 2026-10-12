@@ -13,6 +13,7 @@ import com.chanakya.app.ui.home.HomeScreen
 import com.chanakya.app.ui.legal.AboutScreen
 import com.chanakya.app.ui.legal.PrivacyScreen
 import com.chanakya.app.ui.legal.TermsScreen
+import com.chanakya.app.ui.networkdetail.NetworkDetailScreen
 import com.chanakya.app.ui.reports.ReportsScreen
 import com.chanakya.app.ui.settings.SettingsScreen
 
@@ -43,6 +44,19 @@ fun ChanakyaNavHost(
             val packageName = entry.arguments?.getString(Destinations.ARG_PACKAGE_NAME).orEmpty()
             AppDetailScreen(
                 packageName = packageName,
+                onBack = { navController.popBackStack() },
+                onOpenNetwork = { networkId ->
+                    navController.navigate(Destinations.networkDetail(networkId))
+                },
+            )
+        }
+        composable(
+            route = Destinations.NETWORK_DETAIL,
+            arguments = listOf(navArgument(Destinations.ARG_NETWORK_ID) { type = NavType.StringType }),
+        ) { entry ->
+            val networkId = entry.arguments?.getString(Destinations.ARG_NETWORK_ID).orEmpty()
+            NetworkDetailScreen(
+                networkId = networkId,
                 onBack = { navController.popBackStack() },
             )
         }

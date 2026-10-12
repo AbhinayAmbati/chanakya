@@ -40,6 +40,7 @@ import com.chanakya.app.ui.AppViewModelProvider
 import com.chanakya.app.ui.common.AppIcon
 import com.chanakya.app.ui.common.TimeFormat
 import com.chanakya.app.ui.common.accentColor
+import com.chanakya.app.ui.domain.DomainDetailSheet
 import com.chanakya.core.data.model.BlockedEvent
 import com.chanakya.core.data.model.RuleType
 import com.chanakya.core.designsystem.component.CategoryChip
@@ -63,6 +64,7 @@ import com.chanakya.core.designsystem.theme.StatusDetected
 fun AppDetailScreen(
     packageName: String,
     onBack: () -> Unit,
+    onOpenNetwork: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val container = LocalAppContainer.current
@@ -70,6 +72,11 @@ fun AppDetailScreen(
         viewModel(factory = AppViewModelProvider.appDetail(container, packageName))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val detail = state.detail
+
+    // Tapping a domain opens the shared sheet rather than another screen: a domain is a
+    // little information and a couple of actions, and a third navigation level would
+    // cost more than it gives.
+    var selectedDomain by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
         modifier = modifier
@@ -136,7 +143,7 @@ fun AppDetailScreen(
         if (networks.isNotEmpty()) {
             item { SectionHeader(title = stringResource(R.string.app_detail_networks)) }
             items(networks, key = { it.network.id }) { networkCount ->
-                ChanakyaCard {
+                ChanakyaCard(onClick = { onOpenNetwork(networkCount.network.id) }) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -179,6 +186,7 @@ fun AppDetailScreen(
                 DomainRow(
                     event = event,
                     ruleType = state.ruleByDomain[event.domain],
+                    onOpen = { selectedDomain = event.domain },
                     onBlockEverywhere = { viewModel.blockEverywhere(event.domain) },
                     onAllowEverywhere = { viewModel.allowEverywhere(event.domain) },
                     onBlockForApp = { viewModel.blockForApp(event.domain) },
@@ -188,6 +196,11 @@ fun AppDetailScreen(
         }
 
         item { Spacer(Modifier.height(16.dp)) }
+    }
+
+    val domain = selectedDomain
+    if (domain != null) {
+        DomainDetailSheet(domain = domain, onDismiss = { selectedDomain = null })
     }
 }
 
@@ -199,6 +212,7 @@ fun AppDetailScreen(
 private fun DomainRow(
     event: BlockedEvent,
     ruleType: RuleType?,
+    onOpen: () -> Unit,
     onBlockEverywhere: () -> Unit,
     onAllowEverywhere: () -> Unit,
     onBlockForApp: () -> Unit,
@@ -206,7 +220,7 @@ private fun DomainRow(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
-    ChanakyaCard(contentPadding = PaddingValues(16.dp)) {
+    ChanakyaCard(onClick = onOpen, contentPadding = PaddingValues(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
