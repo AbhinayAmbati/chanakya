@@ -192,6 +192,37 @@ fun SettingsScreen(
             }
         }
 
+        item { SectionHeader(title = stringResource(R.string.settings_diagnostics)) }
+        item {
+            ChanakyaCard {
+                DiagnosticRow(
+                    label = stringResource(R.string.diag_protection),
+                    value = stringResource(
+                        when (vpnState) {
+                            is VpnState.Active -> R.string.diag_active
+                            is VpnState.Error -> R.string.diag_error
+                            VpnState.Starting -> R.string.diag_starting
+                            VpnState.Stopped -> R.string.diag_stopped
+                        },
+                    ),
+                )
+                DiagnosticRow(stringResource(R.string.diag_domains), diagnostics.domainsLoaded.toString())
+                DiagnosticRow(stringResource(R.string.diag_ip_ranges), diagnostics.ipRangesLoaded.toString())
+                DiagnosticRow(stringResource(R.string.diag_dns_servers), diagnostics.routedDnsServers.toString())
+                DiagnosticRow(
+                    stringResource(R.string.diag_session_events),
+                    diagnostics.observationsThisSession.toString(),
+                )
+                DiagnosticRow(
+                    stringResource(R.string.diag_session_blocked),
+                    diagnostics.blockedThisSession.toString(),
+                )
+                DiagnosticRow(stringResource(R.string.diag_total_blocked), blockedTotal.toString())
+            }
+        }
+
+        // The reference material sits last: it is what you read once, not what you come
+        // back to, so it should not stand between the settings and the numbers.
         item { SectionHeader(title = stringResource(R.string.settings_about)) }
         item {
             ChanakyaCard(onClick = onOpenAbout) {
@@ -224,35 +255,6 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-            }
-        }
-
-        item { SectionHeader(title = stringResource(R.string.settings_diagnostics)) }
-        item {
-            ChanakyaCard {
-                DiagnosticRow(
-                    label = stringResource(R.string.diag_protection),
-                    value = stringResource(
-                        when (vpnState) {
-                            is VpnState.Active -> R.string.diag_active
-                            is VpnState.Error -> R.string.diag_error
-                            VpnState.Starting -> R.string.diag_starting
-                            VpnState.Stopped -> R.string.diag_stopped
-                        },
-                    ),
-                )
-                DiagnosticRow(stringResource(R.string.diag_domains), diagnostics.domainsLoaded.toString())
-                DiagnosticRow(stringResource(R.string.diag_ip_ranges), diagnostics.ipRangesLoaded.toString())
-                DiagnosticRow(stringResource(R.string.diag_dns_servers), diagnostics.routedDnsServers.toString())
-                DiagnosticRow(
-                    stringResource(R.string.diag_session_events),
-                    diagnostics.observationsThisSession.toString(),
-                )
-                DiagnosticRow(
-                    stringResource(R.string.diag_session_blocked),
-                    diagnostics.blockedThisSession.toString(),
-                )
-                DiagnosticRow(stringResource(R.string.diag_total_blocked), blockedTotal.toString())
             }
         }
 

@@ -189,31 +189,47 @@ fun BarChart(
             verticalAlignment = Alignment.Bottom,
         ) {
             bars.forEach { bar ->
-                Box(
+                Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
-                    contentAlignment = Alignment.BottomCenter,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // A faint track, so a quiet day still reads as a column rather than
-                    // a gap.
+                    // The figure above the bar. It gets its own row rather than sitting
+                    // inside the bar area, so a full-height bar cannot push it off the
+                    // top of the chart.
+                    Text(
+                        text = bar.value.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.height(4.dp))
+
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(TRACK_FRACTION)
-                            .clip(shape)
-                            .background(trackColor),
-                    )
-                    // The value itself, in the bar colour. This is the box that used to
-                    // be missing: the bars were being drawn in the track colour, which on
-                    // a white card is very nearly invisible.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight((bar.value.toFloat() / peak).coerceIn(0f, 1f))
-                            .clip(shape)
-                            .background(barColor),
-                    )
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.BottomCenter,
+                    ) {
+                        // A faint track, so a quiet day still reads as a column rather
+                        // than a gap.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(TRACK_FRACTION)
+                                .clip(shape)
+                                .background(trackColor),
+                        )
+                        // The value itself, in the bar colour.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight((bar.value.toFloat() / peak).coerceIn(0f, 1f))
+                                .clip(shape)
+                                .background(barColor),
+                        )
+                    }
                 }
             }
         }
