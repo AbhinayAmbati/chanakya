@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -23,11 +24,22 @@ import com.chanakya.app.R
 import com.chanakya.app.di.LocalAppContainer
 import com.chanakya.app.ui.AppViewModelProvider
 import com.chanakya.app.ui.common.ByteFormat
+import com.chanakya.core.data.model.ReportBreakdown
 import com.chanakya.core.data.model.ReportWindow
+import com.chanakya.core.data.model.TrackerCategory
+import com.chanakya.core.designsystem.component.BarChart
 import com.chanakya.core.designsystem.component.ChanakyaCard
+import com.chanakya.core.designsystem.component.ChartBar
+import com.chanakya.core.designsystem.component.ChartSlice
+import com.chanakya.core.designsystem.component.DonutChart
 import com.chanakya.core.designsystem.component.ChanakyaScreenTitle
 import com.chanakya.core.designsystem.component.StatRow
 import com.chanakya.core.designsystem.component.StatTile
+import com.chanakya.core.designsystem.theme.CategoryAdNetworks
+import com.chanakya.core.designsystem.theme.CategoryAnalytics
+import com.chanakya.core.designsystem.theme.CategoryFingerprinting
+import com.chanakya.core.designsystem.theme.CategoryOther
+import com.chanakya.core.designsystem.theme.CategorySocialPixels
 import com.chanakya.core.designsystem.theme.MonoTextStyle
 import com.chanakya.core.designsystem.theme.StatusBlocked
 
@@ -42,6 +54,7 @@ fun ReportsScreen(modifier: Modifier = Modifier) {
     val today by viewModel.today.collectAsStateWithLifecycle()
     val week by viewModel.week.collectAsStateWithLifecycle()
     val allTime by viewModel.allTime.collectAsStateWithLifecycle()
+    val breakdown by viewModel.breakdown.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = modifier
@@ -56,12 +69,81 @@ fun ReportsScreen(modifier: Modifier = Modifier) {
             )
         }
 
+        item { ChartsCard(breakdown = breakdown) }
+
         item { WindowSection(title = stringResource(R.string.reports_today), window = today) }
         item { WindowSection(title = stringResource(R.string.reports_last_7_days), window = week) }
         item { WindowSection(title = stringResource(R.string.reports_all_time), window = allTime) }
 
         item { Spacer(Modifier.height(16.dp)) }
     }
+}
+
+/**
+ * The charts card: the seven-day trend and the split by kind of tracking.
+ *
+ * Drawn from the same local database as everything else on this screen, so it is empty
+ * until there is something real to show rather than showing placeholder numbers.
+ */
+@Composable
+private fun ChartsCard(breakdown: ReportBreakdown) {
+    ChanakyaCard {
+        Text(
+            text = stringResource(R.string.reports_charts_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        if (breakdown.isEmpty) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.reports_no_activity),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@ChanakyaCard
+        }
+
+        if (breakdown.daily.any { it.count > 0 }) {
+            Spacer(Modifier.height(16.dp))
+            BarChart(bars = breakdown.daily.map { ChartBar(it.label, it.count) })
+        }
+
+        if (breakdown.byCategory.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = stringResource(R.string.reports_by_category),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            DonutChart(
+                slices = breakdown.byCategory.map { entry ->
+                    ChartSlice(
+                        label = entry.category.displayName,
+                        value = entry.count,
+                        color = entry.category.chartColor(),
+                    )
+                },
+                centerValue = breakdown.total.toString(),
+                centerCaption = stringResource(R.string.reports_blocked),
+            )
+        }
+    }
+}
+
+/**
+ * The colour the design system assigns to each kind of tracking.
+ *
+ * Mapped here rather than in the design system, which deliberately does not depend on
+ * the data layer and so has no idea what a category is.
+ */
+private fun TrackerCategory.chartColor(): Color = when (this) {
+    TrackerCategory.AD_NETWORKS -> CategoryAdNetworks
+    TrackerCategory.ANALYTICS -> CategoryAnalytics
+    TrackerCategory.SOCIAL_PIXELS -> CategorySocialPixels
+    TrackerCategory.FINGERPRINTING -> CategoryFingerprinting
+    TrackerCategory.OTHER -> CategoryOther
 }
 
 /** One report window: headline stats plus the busiest networks and apps. */

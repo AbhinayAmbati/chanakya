@@ -2,6 +2,7 @@ package com.chanakya.app.ui.reports
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chanakya.core.data.model.ReportBreakdown
 import com.chanakya.core.data.model.ReportWindow
 import com.chanakya.core.data.repository.ReportsRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,4 +27,8 @@ class ReportsViewModel(
     /** Activity since the app started recording. */
     val allTime: StateFlow<ReportWindow> = reportsRepository.observeAllTime()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReportWindow.EMPTY)
+
+    /** Chart data for the last seven days: the daily trend and the category split. */
+    val breakdown: StateFlow<ReportBreakdown> = reportsRepository.observeBreakdown()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReportBreakdown.EMPTY)
 }

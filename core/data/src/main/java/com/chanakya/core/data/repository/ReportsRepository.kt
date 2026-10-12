@@ -3,14 +3,22 @@ package com.chanakya.core.data.repository
 import com.chanakya.core.data.catalog.TrackerCatalog
 import com.chanakya.core.data.db.dao.AppMetaDao
 import com.chanakya.core.data.db.dao.BlockedEventDao
+import com.chanakya.core.data.db.dao.DailyCountRow
+import com.chanakya.core.data.db.dao.NetworkCountRow
 import com.chanakya.core.data.db.entity.toModel
 import com.chanakya.core.data.model.AppCount
 import com.chanakya.core.data.model.AppInfo
+import com.chanakya.core.data.model.CategoryCount
+import com.chanakya.core.data.model.DayCount
 import com.chanakya.core.data.model.NetworkCount
+import com.chanakya.core.data.model.ReportBreakdown
 import com.chanakya.core.data.model.ReportWindow
+import com.chanakya.core.data.model.TrackerCategory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 /**
  * Aggregated protection activity for the Reports screen.
@@ -25,6 +33,11 @@ interface ReportsRepository {
 
     /** Activity since the app started recording. */
     fun observeAllTime(): Flow<ReportWindow>
+
+    /**
+     * Chart data for the last seven days: a daily trend and a split by kind of tracking.
+     */
+    fun observeBreakdown(): Flow<ReportBreakdown>
 }
 
 /**
@@ -46,6 +59,59 @@ class RoomReportsRepository(
     override fun observeWeek(): Flow<ReportWindow> = window(startOfToday() - SIX_DAYS_MILLIS)
 
     override fun observeAllTime(): Flow<ReportWindow> = window(0L)
+
+    override fun observeBreakdown(): Flow<ReportBreakdown> = combine(
+        eventDao.observeDailyCountsSince(startOfWeek()),
+        eventDao.observeNetworkCountsSince(startOfWeek()),
+    ) { daily, networks ->
+        ReportBreakdown(
+            daily = buildDailySeries(daily),
+            byCategory = buildCategorySplit(networks),
+        )
+    }
+
+    /**
+     * Turn the sparse day rows into a fixed seven-day series.
+     *
+     * A day with no activity has no row at all, so the series is walked from the date
+     * rather than from the result - otherwise the bars would slide left on quiet days.
+     */
+    private fun buildDailySeries(rows: List<DailyCountRow>): List<DayCount> {
+        val counts = rows.associate { it.day to it.count }
+
+        val calendar = Calendar.getInstance()
+        calendar.timeInMillis = startOfToday()
+        calendar.add(Calendar.DAY_OF_YEAR, -(SERIES_DAYS - 1))
+
+        return (0 until SERIES_DAYS).map {
+            val key = DAY_KEY_FORMAT.format(calendar.time)
+            val label = calendar.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.SHORT)
+                ?: key
+            val count = counts[key] ?: 0
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+            DayCount(label = label, count = count)
+        }
+    }
+
+    /**
+     * Sum the per-network counts into the categories the catalogue assigns them.
+     *
+     * A network the catalogue does not know about still counts, under "Other" - a
+     * blocked query is a blocked query, even if we cannot name who wanted it.
+     */
+    private fun buildCategorySplit(rows: List<NetworkCountRow>): List<CategoryCount> {
+        val byId = TrackerCatalog.networks.associateBy { it.id }
+        val totals = mutableMapOf<TrackerCategory, Int>()
+
+        for (row in rows) {
+            val category = byId[row.networkId]?.category ?: TrackerCategory.OTHER
+            totals[category] = (totals[category] ?: 0) + row.count
+        }
+
+        return totals.entries
+            .map { CategoryCount(category = it.key, count = it.value) }
+            .sortedByDescending { it.count }
+    }
 
     /** Build the aggregate flow for everything since [since]. */
     private fun window(since: Long): Flow<ReportWindow> = combine(
@@ -75,6 +141,9 @@ class RoomReportsRepository(
         )
     }
 
+    /** Epoch millis at the start of the seven-day window. */
+    private fun startOfWeek(): Long = startOfToday() - SIX_DAYS_MILLIS
+
     /** Epoch millis at 00:00 local time today. */
     private fun startOfToday(): Long {
         val calendar = Calendar.getInstance()
@@ -89,5 +158,11 @@ class RoomReportsRepository(
     private companion object {
         const val TOP_LIMIT = 5
         const val SIX_DAYS_MILLIS = 6L * 24 * 60 * 60 * 1000
+
+        /** Days shown in the trend chart, including today. */
+        const val SERIES_DAYS = 7
+
+        /** Matches the format the daily-counts query emits. */
+        val DAY_KEY_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     }
 }

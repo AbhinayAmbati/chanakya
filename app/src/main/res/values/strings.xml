@@ -133,6 +133,8 @@
     <string name="settings_about_open">Open</string>
     <string name="settings_terms">Terms of use</string>
     <string name="settings_privacy">Privacy policy</string>
+    <string name="reports_charts_title">Last 7 days at a glance</string>
+    <string name="reports_by_category">Blocked by category</string>
     <string name="settings_full_tunnel">Full tunnel</string>
     <string name="settings_full_tunnel_desc">Route every packet through Chanakya, not just DNS. This is what lets Private DNS stay switched on: the encrypted-DNS probe is carried like any other connection instead of being refused. Leave it off unless you use Private DNS, because with it on the app carries all of your traffic.</string>
 </resources>

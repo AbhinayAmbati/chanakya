@@ -75,6 +75,37 @@ interface BlockedEventDao {
     )
     fun observeTopNetworksSince(since: Long, limit: Int): Flow<List<NetworkCountRow>>
 
+    /**
+     * Blocked counts per network since the given time, with no limit.
+     *
+     * The top-networks query caps its result because it is for display. The category
+     * split needs every network, because the categories are summed from them and a
+     * truncated list would silently under-count.
+     */
+    @Query(
+        "SELECT networkId, SUM(entryCount) AS count FROM (" +
+            "SELECT networkId, COUNT(*) AS entryCount FROM blocked_events " +
+            "WHERE blocked = 1 AND timestamp >= :since AND networkId IS NOT NULL GROUP BY networkId " +
+            "UNION ALL " +
+            "SELECT networkId, SUM(blockedCount) AS entryCount FROM daily_aggregates " +
+            "WHERE dayStart >= :since AND networkId != '' GROUP BY networkId" +
+            ") GROUP BY networkId ORDER BY count DESC",
+    )
+    fun observeNetworkCountsSince(since: Long): Flow<List<NetworkCountRow>>
+
+    /**
+     * Blocked counts per local day since the given time, for the trend chart.
+     *
+     * Only raw events are read: a seven-day window sits well inside the retention
+     * period, so nothing in it has been rolled up into the aggregate table yet.
+     */
+    @Query(
+        "SELECT strftime('%Y-%m-%d', timestamp / 1000, 'unixepoch', 'localtime') AS day, " +
+            "COUNT(*) AS count FROM blocked_events " +
+            "WHERE blocked = 1 AND timestamp >= :since GROUP BY day ORDER BY day",
+    )
+    fun observeDailyCountsSince(since: Long): Flow<List<DailyCountRow>>
+
     /** The busiest apps since the given time. */
     @Query(
         "SELECT packageName, SUM(entryCount) AS count FROM (" +
