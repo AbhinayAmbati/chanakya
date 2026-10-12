@@ -3,8 +3,8 @@ package com.chanakya.core.data.repository
 import com.chanakya.core.data.catalog.TrackerCatalog
 import com.chanakya.core.data.db.dao.AppMetaDao
 import com.chanakya.core.data.db.dao.BlockedEventDao
+import com.chanakya.core.data.db.NetworkCountRow
 import com.chanakya.core.data.db.dao.DailyCountRow
-import com.chanakya.core.data.db.dao.NetworkCountRow
 import com.chanakya.core.data.db.entity.toModel
 import com.chanakya.core.data.model.AppCount
 import com.chanakya.core.data.model.AppInfo
