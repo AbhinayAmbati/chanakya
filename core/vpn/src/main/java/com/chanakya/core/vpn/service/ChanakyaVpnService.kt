@@ -7,6 +7,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.VpnService
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import com.chanakya.core.data.db.DatabaseProvider
 import com.chanakya.core.data.prefs.SettingsRepository
@@ -169,6 +170,13 @@ class ChanakyaVpnService : VpnService() {
         val upstreamServers = currentUpstreamResolvers()
         tunnelBlockIpLevel = blockIpLevelEnabled
         tunnelFullTunnel = fullTunnelEnabled
+
+        // Recorded so the UI can say so out loud: with Private DNS on, lookups are
+        // encrypted to the resolver and this app cannot see or filter them, and on some
+        // devices the platform loses its resolver entirely.
+        VpnStatus.editDiagnostics {
+            it.copy(privateDnsActive = isPrivateDnsActive(underlyingNetwork))
+        }
         val descriptor = establishTunnel(upstreamServers)
         if (descriptor == null) {
             VpnStatus.update(VpnState.Error("Could not establish the tunnel"))
@@ -542,6 +550,19 @@ class ChanakyaVpnService : VpnService() {
             if (servers.isNotEmpty()) return servers
         }
         return emptyList()
+    }
+
+    /**
+     * Whether Android's Private DNS (DNS-over-TLS) is switched on.
+     *
+     * Read from the *underlying* network, because the VPN we are about to build exposes no
+     * resolvers of its own. Unsupported below API 28, where the setting does not exist.
+     */
+    private fun isPrivateDnsActive(network: Network?): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+        val manager = getSystemService(ConnectivityManager::class.java) ?: return false
+        val properties = network?.let { manager.getLinkProperties(it) } ?: return false
+        return properties.isPrivateDnsActive
     }
 
     /**

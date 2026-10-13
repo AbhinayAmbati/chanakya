@@ -142,6 +142,11 @@
     <string name="domain_last_seen_label">Last seen</string>
     <string name="domain_last_seen">Last seen %1$s</string>
     <string name="domain_asked_by">Asked for by</string>
+    <string name="diag_private_dns">Private DNS</string>
+    <string name="diag_private_dns_on">On - blocking limited</string>
+    <string name="diag_private_dns_off">Off</string>
+    <string name="home_private_dns_title">Private DNS is on</string>
+    <string name="home_private_dns_body">Chanakya filters plain DNS. While Private DNS is on, your lookups are encrypted to your resolver, so they cannot be blocked - and on some phones the connection drops until it is switched off. Turn it off in Settings, then Network and Internet, then Private DNS.</string>
     <string name="reports_charts_title">Last 7 days at a glance</string>
     <string name="reports_by_category">Blocked by category</string>
     <string name="settings_full_tunnel">Full tunnel</string>

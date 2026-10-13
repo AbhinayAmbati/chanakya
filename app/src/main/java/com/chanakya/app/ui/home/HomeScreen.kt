@@ -31,6 +31,7 @@ import com.chanakya.app.di.LocalAppContainer
 import com.chanakya.app.ui.AppViewModelProvider
 import com.chanakya.app.ui.common.AppRow
 import com.chanakya.core.data.model.BlockedEvent
+import com.chanakya.core.vpn.model.VpnStatus
 import com.chanakya.core.designsystem.component.ChanakyaCard
 import com.chanakya.core.designsystem.component.ChanakyaPrimaryButton
 import com.chanakya.core.designsystem.component.ChanakyaScreenTitle
@@ -63,6 +64,10 @@ fun HomeScreen(
     val viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.home(container))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Read straight from the engine, the same way Settings does, so the warning below can
+    // reflect what the tunnel actually observed rather than a second guess at it.
+    val diagnostics by VpnStatus.diagnostics.collectAsStateWithLifecycle()
+
     // Shows the system VPN consent dialog the first time protection is enabled.
     val consentLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -93,6 +98,13 @@ fun HomeScreen(
                 },
                 onTurnOff = viewModel::stopProtection,
             )
+        }
+
+        // The Private DNS trap, said out loud. Without this the app simply under-performs
+        // - or, on some phones, the connection drops - with nothing on screen to explain
+        // why, which reads as a broken app rather than a setting to change.
+        if (state.isProtected && diagnostics.privateDnsActive) {
+            item { PrivateDnsWarning() }
         }
 
         item {
@@ -220,6 +232,26 @@ private fun ProtectionCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Shown while Android's Private DNS is on, because DNS filtering cannot work then.
+ */
+@Composable
+private fun PrivateDnsWarning() {
+    ChanakyaCard {
+        Text(
+            text = stringResource(R.string.home_private_dns_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = StatusDetected,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.home_private_dns_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

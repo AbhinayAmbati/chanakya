@@ -12,6 +12,10 @@ package com.chanakya.core.vpn.model
  * @param ipRangesLoaded how many blocked IP ranges the engine holds.
  * @param observationsThisSession queries and dropped packets seen since the tunnel came up.
  * @param blockedThisSession how many of those were blocked.
+ * @param privateDnsActive whether Android's Private DNS is on. When it is, lookups are
+ *   encrypted to the resolver and cannot be filtered - and on some devices the platform
+ *   loses its resolver entirely, which is why the UI warns rather than under-performing
+ *   quietly.
  */
 data class VpnDiagnostics(
     val routedDnsServers: Int = 0,
@@ -19,4 +23,5 @@ data class VpnDiagnostics(
     val ipRangesLoaded: Int = 0,
     val observationsThisSession: Int = 0,
     val blockedThisSession: Int = 0,
+    val privateDnsActive: Boolean = false,
 )

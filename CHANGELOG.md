@@ -7,6 +7,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.15] - 2026-10-12
+
+### Added
+
+- Each bar in the seven-day chart now carries its figure above it.
+
+### Changed
+
+- About, Terms and Privacy moved below Diagnostics in Settings. They are reference
+  material, read once rather than returned to.
+
+## [1.0.14] - 2026-10-12
+
+### Fixed
+
+- The bar chart drew its bars in the track colour - a light grey on a white card, very
+  nearly invisible - because the value box was missing entirely and `barColor` was never
+  used.
+- The seven-day series was built by matching SQLite's `strftime(..., 'localtime')` output
+  against a date format built in Kotlin. Any disagreement about the day boundary produced
+  no matches and an empty chart. It is now bucketed in memory from the same events the
+  rest of the screen uses.
+
+### Changed
+
+- The bar chart no longer hides itself when every day is quiet; a chart that vanishes is
+  indistinguishable from one that is broken.
+
+## [1.0.13] - 2026-10-12
+
+### Added
+
+- Tapping a tracker network opens a cross-app screen: who it is, every domain it owns,
+  and every app on the device talking to it.
+- Tapping a domain opens a bottom sheet with its full history and the apps that asked for
+  it, reachable from both an app's screen and a network's.
+
+## [1.0.12] - 2026-10-12
+
+### Added
+
+- Charts on Reports: a seven-day trend and a split by kind of tracking, drawn by hand in
+  the app's palette. No charting library was added.
+
+## [1.0.11] - 2026-10-12
+
+### Fixed
+
+- Allowed lookups were relayed inline on the packet loop, so every lookup queued behind
+  the previous one and one that timed out held the loop for up to six seconds. Apps that
+  fire dozens of lookups at once - a shopping app loading a product grid - timed out
+  waiting. Lookups are now relayed on their own coroutines.
+
+### Changed
+
+- Full-tunnel mode is parked. The relay had not been validated on a device and took the
+  network down, so the setting is no longer read and the tunnel always builds in the
+  DNS-only mode that works.
+
+## [1.0.10] - 2026-10-12
+
+### Fixed
+
+- Full-tunnel mode declared no DNS server on a default-route VPN, leaving the platform
+  with nothing to resolve with. It now advertises the device's real resolvers.
+- Shutting protection down re-posted the ongoing notification, leaving a stray
+  "protection active" notification behind after the user switched it off.
+
+## [1.0.9] - 2026-10-11
+
+### Fixed
+
+- UDP is now mapped per source port rather than per destination, so the relay behaves
+  like a cone NAT. Two symmetric NATs cannot hole-punch, which is why two phones running
+  Chanakya could not complete a WhatsApp call while one on its own could.
+
+## [1.0.8] - 2026-10-11
+
+### Fixed
+
+- `facebook.com` is no longer blocked as a whole domain. It is a platform rather than a
+  tracker, and blocking it broke WhatsApp calls with "check internet connection". The
+  tracking endpoints (`graph.facebook.com`, `connect.facebook.net`, `an.facebook.com`)
+  remain blocked.
+
+## [1.0.7] - 2026-10-11
+
+### Added
+
+- Full-tunnel mode: an option to route every packet through the tunnel and forward it
+  with a UDP flow relay and a userspace TCP relay, so Android's Private DNS probe is
+  carried like any other connection. Later parked in 1.0.11.
+- About, Terms of use and Privacy screens, reachable from Settings.
+
+## [1.0.6] - 2026-10-11
+
+### Fixed
+
+- Reverted the resolver change from 1.0.4. Advertising our own resolver is what makes the
+  platform hand DNS to the tunnel at all; merely routing the real resolvers left the app
+  observing nothing and reporting zero blocked.
+
+## [1.0.5] - 2026-10-11
+
+### Fixed
+
+- The Apps list crashed while scrolling. The icon and uid caches stored misses as null,
+  and `ConcurrentHashMap` rejects null values, so the first unreadable icon threw.
+
+## [1.0.4] - 2026-10-11
+
+### Changed
+
+- Rode on the device's real resolvers instead of advertising one of our own, so Private
+  DNS had a resolver it could use. Reverted in 1.0.6 - it stopped DNS capture entirely.
+
+## [1.0.3] - 2026-10-11
+
+### Fixed
+
+- TCP that reaches the tunnel is now reset, so Android's Private DNS falls back to plain
+  DNS instead of hanging.
+- The ongoing notification sat at zero because it was built once at startup and never
+  refreshed.
+- The "Protected" card was white-on-white in dark mode: a fixed light background with a
+  theme-derived text colour.
+- The Home tab was unreachable from the other tabs; returning to the start destination
+  with `saveState`/`restoreState` silently did nothing.
+
+## [1.0.2] - 2026-10-11
+
+### Fixed
+
+- Protection no longer broke the device's internet connection.
+
+### Changed
+
+- The oversized navigation bar was replaced with a compact floating pill.
+
 ## [1.0.1] - 2026-10-11
 
 ### Fixed

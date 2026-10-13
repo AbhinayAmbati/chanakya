@@ -206,6 +206,17 @@ fun SettingsScreen(
                         },
                     ),
                 )
+                // Listed here because it is the most common reason filtering looks broken.
+                DiagnosticRow(
+                    label = stringResource(R.string.diag_private_dns),
+                    value = stringResource(
+                        if (diagnostics.privateDnsActive) {
+                            R.string.diag_private_dns_on
+                        } else {
+                            R.string.diag_private_dns_off
+                        },
+                    ),
+                )
                 DiagnosticRow(stringResource(R.string.diag_domains), diagnostics.domainsLoaded.toString())
                 DiagnosticRow(stringResource(R.string.diag_ip_ranges), diagnostics.ipRangesLoaded.toString())
                 DiagnosticRow(stringResource(R.string.diag_dns_servers), diagnostics.routedDnsServers.toString())

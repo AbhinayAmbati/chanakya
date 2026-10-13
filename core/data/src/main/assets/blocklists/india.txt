@@ -7,23 +7,30 @@
 0.0.0.0 api.moengage.com
 0.0.0.0 webengage.com
 0.0.0.0 sdk.webengage.com
-0.0.0.0 truecaller.com
+# Whole-app domains are deliberately NOT blocked - see the note at the foot of this file.
 0.0.0.0 sdk.truecaller.com
 0.0.0.0 inmobi.com
 0.0.0.0 inmo.bsclink.com
 0.0.0.0 adgebra.co.in
 0.0.0.0 ads.yaar.com
 0.0.0.0 mxsads.com
-0.0.0.0 sendbird.com
 0.0.0.0 mparticle.com
 0.0.0.0 kochava.com
-0.0.0.0 tenor.com
-0.0.0.0 sharechat.com
 0.0.0.0 analytics.sharechat.com
-0.0.0.0 dailyhunt.in
 0.0.0.0 analytics.dailyhunt.in
 0.0.0.0 zapr.in
 0.0.0.0 vmax.com
 0.0.0.0 ads.vmax.com
 0.0.0.0 netcorecloud.com
 0.0.0.0 analytics.netcorecloud.com
+
+# Deliberately absent, and they should stay absent:
+#   truecaller.com    the Truecaller app itself
+#   sharechat.com     the ShareChat app itself
+#   dailyhunt.in      the Dailyhunt app itself
+#   sendbird.com      an in-app chat SDK, which breaks chat when blocked
+#   tenor.com         the GIF service WhatsApp and others use for search
+#
+# Blocking a whole platform takes the app down with the tracker, and an app that breaks
+# gets uninstalled and reviewed accordingly. The analytics subdomains above are the
+# tracking, and they are enough.
